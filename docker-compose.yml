@@ -1,0 +1,17 @@
+services:
+  asset-management-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mervin-tm
+    container_name: mervin-tm
+
+    env_file:
+      - .env
+      
+    ports:
+      - "8083:8083"
+
+    volumes:
+      - ./logs:/app/logs
+

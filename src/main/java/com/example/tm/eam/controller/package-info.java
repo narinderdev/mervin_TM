@@ -1,5 +1,4 @@
 /**
- * Reserved for EAM read endpoints in a future task.
- * This package is intentionally empty in the current direct-DB integration phase.
+ * EAM read-only lookup endpoints exposed by TM.
  */
 package com.example.tm.eam.controller;

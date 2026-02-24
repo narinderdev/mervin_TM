@@ -1,9 +1,11 @@
 package com.example.tm.timesheet.entity;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -30,6 +32,15 @@ public class Timesheet {
     private String viewType;
 
     private Long technicianId;
+
+    @Column(precision = 8, scale = 2)
+    private BigDecimal totalWorked;
+
+    @Column(precision = 8, scale = 2)
+    private BigDecimal totalNonWorked;
+
+    @Column(precision = 8, scale = 2)
+    private BigDecimal totalPremium;
 
     @OneToMany(mappedBy = "timesheet", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetRow> timesheetRows = new ArrayList<>();

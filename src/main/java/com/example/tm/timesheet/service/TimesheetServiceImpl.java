@@ -67,6 +67,9 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setPeriodEndDate(requestDto.getPeriodEndDate());
         entity.setViewType(requestDto.getViewType());
         entity.setTechnicianId(requestDto.getTechnicianId());
+        entity.setTotalWorked(requestDto.getTotalWorked());
+        entity.setTotalNonWorked(requestDto.getTotalNonWorked());
+        entity.setTotalPremium(requestDto.getTotalPremium());
         entity.clearRows();
         requestDto.getTimesheetRows()
                 .stream()
@@ -96,6 +99,9 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .periodEndDate(entity.getPeriodEndDate())
                 .viewType(entity.getViewType())
                 .technicianId(entity.getTechnicianId())
+                .totalWorked(entity.getTotalWorked())
+                .totalNonWorked(entity.getTotalNonWorked())
+                .totalPremium(entity.getTotalPremium())
                 .timesheetRows(entity.getTimesheetRows()
                         .stream()
                         .map(this::toRowResponse)
