@@ -43,3 +43,5 @@ src/.env
 
 
 .gradle-home/
+
+logs/
