@@ -1,5 +1,6 @@
 package com.example.tm.timesheet.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -31,16 +32,19 @@ public class TimesheetRequestDto {
     @NotNull
     @DecimalMin(value = "0.0", inclusive = true)
     @JsonProperty("total_worked")
+    @JsonAlias("totalWorked")
     private BigDecimal totalWorked;
 
     @NotNull
     @DecimalMin(value = "0.0", inclusive = true)
     @JsonProperty("total_non_worked")
+    @JsonAlias("totalNonWorked")
     private BigDecimal totalNonWorked;
 
     @NotNull
     @DecimalMin(value = "0.0", inclusive = true)
     @JsonProperty("total_premium")
+    @JsonAlias("totalPremium")
     private BigDecimal totalPremium;
 
     @NotEmpty
