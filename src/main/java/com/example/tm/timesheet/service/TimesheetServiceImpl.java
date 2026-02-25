@@ -10,8 +10,10 @@ import com.example.tm.timesheet.entity.TimesheetRow;
 import com.example.tm.timesheet.repo.TimesheetRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +24,8 @@ public class TimesheetServiceImpl implements TimesheetService {
 
     @Override
     public TimesheetResponseDto create(TimesheetRequestDto requestDto) {
+        rejectDuplicatePeriod(requestDto.getTechnicianId(), requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), null);
+
         Timesheet entity = new Timesheet();
         populateEntity(requestDto, entity);
         entity.setStatus("PENDING");
@@ -47,6 +51,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     @Override
     public TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto) {
         Timesheet existing = findByIdOrThrow(id);
+        rejectDuplicatePeriod(requestDto.getTechnicianId(), requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), id);
         populateEntity(requestDto, existing);
 
         return toResponse(timesheetRepository.save(existing));
@@ -141,5 +146,23 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .comment(row.getComment())
                 .isDeleted(row.getIsDeleted())
                 .build();
+    }
+
+    private void rejectDuplicatePeriod(Long technicianId, java.time.LocalDate start, java.time.LocalDate end, Long currentId) {
+        boolean exists = timesheetRepository.existsByTechnicianIdAndPeriodStartDateAndPeriodEndDate(technicianId, start, end);
+        if (exists) {
+            // If updating, allow the same record
+            if (currentId != null) {
+                Timesheet found = timesheetRepository.findById(currentId).orElse(null);
+                if (found != null
+                        && technicianId.equals(found.getTechnicianId())
+                        && start.equals(found.getPeriodStartDate())
+                        && end.equals(found.getPeriodEndDate())) {
+                    return;
+                }
+            }
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Timesheet already exists for technician " + technicianId + " and period " + start + " to " + end);
+        }
     }
 }
