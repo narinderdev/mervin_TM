@@ -4,8 +4,6 @@ import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
@@ -15,7 +13,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 public class EamJdbcConfig {
 
     @Bean(name = "eamDataSource")
-    @ConfigurationProperties(prefix = "spring.datasource.eam")
     public DataSource eamDataSource(Environment env) {
         String rawUrl = env.getProperty("spring.datasource.eam.jdbc-url");
         String url = enforceTrust(rawUrl);
@@ -32,6 +29,7 @@ public class EamJdbcConfig {
         config.setIdleTimeout(Long.parseLong(env.getProperty("spring.datasource.eam.idle-timeout", "300000")));
         config.setMaxLifetime(Long.parseLong(env.getProperty("spring.datasource.eam.max-lifetime", "1800000")));
         config.setValidationTimeout(Long.parseLong(env.getProperty("spring.datasource.eam.validation-timeout", "5000")));
+        config.setAutoCommit(Boolean.parseBoolean(env.getProperty("spring.datasource.eam.auto-commit", "false")));
         // Ensure we never fail on cert issues in lower environments; prod should use a trusted cert.
         config.addDataSourceProperty("trustServerCertificate", "true");
         config.addDataSourceProperty("encrypt", "false");
