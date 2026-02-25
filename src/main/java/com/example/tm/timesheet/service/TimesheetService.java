@@ -17,4 +17,6 @@ public interface TimesheetService {
     void delete(Long id);
 
     TimesheetResponseDto approve(Long id);
+
+    List<TimesheetResponseDto> getByTechnician(Long technicianId);
 }

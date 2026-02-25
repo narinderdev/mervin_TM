@@ -60,6 +60,15 @@ public class TimesheetServiceImpl implements TimesheetService {
     }
 
     @Override
+    @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
+    public List<TimesheetResponseDto> getByTechnician(Long technicianId) {
+        return timesheetRepository.findByTechnicianId(technicianId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
     public void delete(Long id) {
         Timesheet existing = findByIdOrThrow(id);
         timesheetRepository.delete(existing);

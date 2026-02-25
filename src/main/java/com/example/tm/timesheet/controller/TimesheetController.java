@@ -44,6 +44,11 @@ public class TimesheetController {
         return timesheetService.update(id, requestDto);
     }
 
+    @GetMapping("/technicians/{technicianId}")
+    public List<TimesheetResponseDto> getByTechnician(@PathVariable("technicianId") Long technicianId) {
+        return timesheetService.getByTechnician(technicianId);
+    }
+
     @PostMapping("/{id}/approve")
     public TimesheetResponseDto approve(@PathVariable Long id) {
         return timesheetService.approve(id);
