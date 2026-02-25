@@ -44,6 +44,11 @@ public class TimesheetController {
         return timesheetService.update(id, requestDto);
     }
 
+    @PostMapping("/{id}/approve")
+    public TimesheetResponseDto approve(@PathVariable Long id) {
+        return timesheetService.approve(id);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         timesheetService.delete(id);

@@ -12,6 +12,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Column;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -45,6 +46,9 @@ public class Timesheet {
 
     @Column(name = "total_premium", precision = 8, scale = 2)
     private BigDecimal totalPremium;
+
+    @Column(name = "status", length = 20)
+    private String status;
 
     @OneToMany(mappedBy = "timesheet", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetRow> timesheetRows = new ArrayList<>();

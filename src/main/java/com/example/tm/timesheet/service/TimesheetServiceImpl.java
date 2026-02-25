@@ -24,6 +24,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     public TimesheetResponseDto create(TimesheetRequestDto requestDto) {
         Timesheet entity = new Timesheet();
         populateEntity(requestDto, entity);
+        entity.setStatus("PENDING");
 
         return toResponse(timesheetRepository.save(entity));
     }
@@ -48,6 +49,13 @@ public class TimesheetServiceImpl implements TimesheetService {
         Timesheet existing = findByIdOrThrow(id);
         populateEntity(requestDto, existing);
 
+        return toResponse(timesheetRepository.save(existing));
+    }
+
+    @Override
+    public TimesheetResponseDto approve(Long id) {
+        Timesheet existing = findByIdOrThrow(id);
+        existing.setStatus("APPROVED");
         return toResponse(timesheetRepository.save(existing));
     }
 
@@ -102,6 +110,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .totalWorked(entity.getTotalWorked())
                 .totalNonWorked(entity.getTotalNonWorked())
                 .totalPremium(entity.getTotalPremium())
+                .status(entity.getStatus() == null ? "PENDING" : entity.getStatus())
                 .timesheetRows(entity.getTimesheetRows()
                         .stream()
                         .map(this::toRowResponse)

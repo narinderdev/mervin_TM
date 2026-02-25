@@ -15,4 +15,6 @@ public interface TimesheetService {
     TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto);
 
     void delete(Long id);
+
+    TimesheetResponseDto approve(Long id);
 }
