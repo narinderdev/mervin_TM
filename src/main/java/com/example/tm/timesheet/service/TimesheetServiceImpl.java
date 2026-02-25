@@ -162,7 +162,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 }
             }
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                    "Timesheet already exists for technician " + technicianId + " and period " + start + " to " + end);
+                    "Timesheet already exists for period " + start + " to " + end);
         }
     }
 }
