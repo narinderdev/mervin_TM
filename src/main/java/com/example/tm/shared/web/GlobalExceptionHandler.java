@@ -3,21 +3,23 @@ package com.example.tm.shared.web;
 import com.example.tm.shared.constants.HeaderConstants;
 import com.example.tm.shared.exception.ReferenceValidationException;
 import com.example.tm.shared.exception.ResourceNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.stream.Collectors;
-import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
-import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
+@Slf4j
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ReferenceValidationException.class)
@@ -70,6 +72,12 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiErrorResponse> handleDatabaseException(
             Exception exception,
             HttpServletRequest request) {
+        log.error("Database exception on {} {} cid={} msg={}",
+                request.getMethod(),
+                request.getRequestURI(),
+                extractCorrelationId(request),
+                exception.getMessage(),
+                exception);
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Database operation failed", request);
     }
 
