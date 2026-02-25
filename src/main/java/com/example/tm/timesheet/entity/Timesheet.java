@@ -25,21 +25,25 @@ public class Timesheet {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "period_start_date")
     private LocalDate periodStartDate;
 
+    @Column(name = "period_end_date")
     private LocalDate periodEndDate;
 
+    @Column(name = "view_type", length = 50)
     private String viewType;
 
+    @Column(name = "technician_id")
     private Long technicianId;
 
-    @Column(precision = 8, scale = 2)
+    @Column(name = "total_worked", precision = 8, scale = 2)
     private BigDecimal totalWorked;
 
-    @Column(precision = 8, scale = 2)
+    @Column(name = "total_non_worked", precision = 8, scale = 2)
     private BigDecimal totalNonWorked;
 
-    @Column(precision = 8, scale = 2)
+    @Column(name = "total_premium", precision = 8, scale = 2)
     private BigDecimal totalPremium;
 
     @OneToMany(mappedBy = "timesheet", cascade = CascadeType.ALL, orphanRemoval = true)

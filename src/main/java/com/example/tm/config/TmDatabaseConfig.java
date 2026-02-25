@@ -64,6 +64,16 @@ public class TmDatabaseConfig {
         if (defaultSchema != null && !defaultSchema.isBlank()) {
             properties.put("hibernate.default_schema", defaultSchema);
         }
+        // Enforce snake_case table/column names to avoid camelCase duplicates being generated.
+        String physicalNaming = environment.getProperty(
+                "spring.jpa.hibernate.naming.physical-strategy",
+                "org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy");
+        properties.put("hibernate.physical_naming_strategy", physicalNaming);
+
+        String implicitNaming = environment.getProperty(
+                "spring.jpa.hibernate.naming.implicit-strategy",
+                "org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy");
+        properties.put("hibernate.implicit_naming_strategy", implicitNaming);
         factory.setJpaPropertyMap(properties);
         return factory;
     }
