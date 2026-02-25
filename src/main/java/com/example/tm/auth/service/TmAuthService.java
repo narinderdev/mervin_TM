@@ -29,12 +29,14 @@ public class TmAuthService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already registered");
         }
 
+        boolean firstUser = tmUserRepository.count() == 0;
+
         TmUser user = new TmUser();
         user.setFirstName(request.getFirstName().trim());
         user.setLastName(request.getLastName().trim());
         user.setEmail(normalizedEmail);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setRole("Admin");
+        user.setRole(firstUser ? "Admin" : "Technician");
         user.setActive(true);
 
         TmUser saved = tmUserRepository.save(user);
