@@ -1,5 +1,20 @@
 package com.example.tm.eam.service;
 
+import com.example.tm.eam.dto.DailyAvailabilityDto;
+import com.example.tm.eam.dto.TechnicianActivityDto;
+import com.example.tm.eam.dto.TechnicianDashboardResponse;
+import com.example.tm.eam.dto.TechnicianDetailsResponse;
+import com.example.tm.eam.dto.TechnicianHolidayListResponse;
+import com.example.tm.eam.dto.TechnicianHolidayResponse;
+import com.example.tm.eam.dto.TechnicianLeaveListResponse;
+import com.example.tm.eam.dto.TechnicianLeaveResponse;
+import com.example.tm.eam.dto.TechnicianListResponse;
+import com.example.tm.eam.dto.TechnicianTeamDetailsResponse;
+import com.example.tm.eam.dto.TechnicianTeamListResponse;
+import com.example.tm.eam.dto.TechnicianTeamMembershipResponse;
+import com.example.tm.eam.dto.TimeWindowDto;
+import com.example.tm.eam.dto.WorkOrderDetailsResponse;
+import com.example.tm.eam.dto.WorkOrderListResponse;
 import com.example.tm.shared.exception.ResourceNotFoundException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -9,7 +24,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +39,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     private final JdbcTemplate jdbcTemplate;
 
     @Override
-    public Object getDashboardTechnicians(Integer limit) {
+    public TechnicianDashboardResponse getDashboardTechnicians(Integer limit) {
         int resolvedLimit = limit == null ? 5 : Math.max(1, Math.min(limit, 50));
         LocalDate today = LocalDate.now();
         LocalDateTime dayStart = today.atStartOfDay();
@@ -68,20 +82,20 @@ public class EamLookupServiceImpl implements EamLookupService {
                 OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
                 """, resolvedLimit);
 
-        List<Map<String, Object>> activities = recentRows.stream().map(this::mapActivity).toList();
+        List<TechnicianActivityDto> activities = recentRows.stream().map(this::mapActivity).toList();
         long availableToday = isHolidayToday ? 0 : Math.max(totalTechnicians - busyCount - onLeave, 0);
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("totalTechnicians", totalTechnicians);
-        data.put("availableToday", availableToday);
-        data.put("onLeave", onLeave);
-        data.put("workOrders", workOrders);
-        data.put("recentActivities", activities);
-        return data;
+        return TechnicianDashboardResponse.builder()
+                .totalTechnicians(totalTechnicians)
+                .availableToday(availableToday)
+                .onLeave(onLeave)
+                .workOrders(workOrders)
+                .recentActivities(activities)
+                .build();
     }
 
     @Override
-    public Object getTechnicians(int page, int size) {
+    public TechnicianListResponse getTechnicians(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
@@ -99,18 +113,25 @@ public class EamLookupServiceImpl implements EamLookupService {
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, offset, safeSize);
 
-        List<Map<String, Object>> technicians = rows.stream().map(this::mapTechnician).toList();
-        return paged("technicians", technicians, safePage, safeSize, total);
+        List<TechnicianDetailsResponse> technicians = rows.stream().map(this::mapTechnician).toList();
+        return TechnicianListResponse.builder()
+                .technicians(technicians)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize))
+                .last(safePage >= Math.max((int) Math.ceil((double) total / safeSize) - 1, 0))
+                .build();
     }
 
     @Override
-    public Object getTechnicianAvailabilityMonthly(Long technicianId, Integer days) {
+    public List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days) {
         ensureTechnicianExists(technicianId);
         return buildAvailability(technicianId, days);
     }
 
     @Override
-    public Object getTechnicianTeams(int page, int size) {
+    public TechnicianTeamListResponse getTechnicianTeams(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
@@ -122,12 +143,20 @@ public class EamLookupServiceImpl implements EamLookupService {
                 ORDER BY id
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, offset, safeSize);
-        List<Map<String, Object>> teams = rows.stream().map(this::mapTeam).toList();
-        return paged("teams", teams, safePage, safeSize, total);
+        List<TechnicianTeamDetailsResponse> teams = rows.stream().map(this::mapTeam).toList();
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return TechnicianTeamListResponse.builder()
+                .teams(teams)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
     }
 
     @Override
-    public Object getWorkOrders(int page, int size) {
+    public WorkOrderListResponse getWorkOrders(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
@@ -138,12 +167,20 @@ public class EamLookupServiceImpl implements EamLookupService {
                 ORDER BY wo.planned_end_datetime ASC, wo.id ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, offset, safeSize);
-        List<Map<String, Object>> workOrders = rows.stream().map(this::mapWorkOrder).toList();
-        return paged("workOrders", workOrders, safePage, safeSize, total);
+        List<WorkOrderDetailsResponse> workOrders = rows.stream().map(this::mapWorkOrder).toList();
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return WorkOrderListResponse.builder()
+                .workOrders(workOrders)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
     }
 
     @Override
-    public Object getWorkOrderById(Long workOrderId) {
+    public WorkOrderDetailsResponse getWorkOrderById(Long workOrderId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(workOrderSelect() + " WHERE wo.deleted = 0 AND wo.id = ?", workOrderId);
         if (rows.isEmpty()) {
             throw new ResourceNotFoundException("Work order not found: " + workOrderId);
@@ -152,7 +189,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public Object getHolidays(int page, int size) {
+    public TechnicianHolidayListResponse getHolidays(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -164,12 +201,20 @@ public class EamLookupServiceImpl implements EamLookupService {
                 ORDER BY holiday_date ASC, id ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, offset, safeSize);
-        List<Map<String, Object>> holidays = rows.stream().map(this::mapHoliday).toList();
-        return paged("holidays", holidays, safePage, safeSize, total);
+        List<TechnicianHolidayResponse> holidays = rows.stream().map(this::mapHoliday).toList();
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return TechnicianHolidayListResponse.builder()
+                .holidays(holidays)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
     }
 
     @Override
-    public Object getHolidayById(Long holidayId) {
+    public TechnicianHolidayResponse getHolidayById(Long holidayId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT id, holiday_name, holiday_type, holiday_date, notes, created_at
                 FROM technician_holidays
@@ -182,7 +227,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public Object getTechniciansLeaves(int page, int size) {
+    public TechnicianLeaveListResponse getTechniciansLeaves(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -192,21 +237,35 @@ public class EamLookupServiceImpl implements EamLookupService {
                 ORDER BY l.start_date ASC, l.id ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, offset, safeSize);
-        List<Map<String, Object>> leaves = rows.stream().map(this::mapLeave).toList();
-        return paged("leaves", leaves, safePage, safeSize, total);
+        List<TechnicianLeaveResponse> leaves = rows.stream().map(this::mapLeave).toList();
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return TechnicianLeaveListResponse.builder()
+                .leaves(leaves)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
     }
 
     @Override
-    public Object getTechnicianLeaves(Long technicianId) {
+    public TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId) {
         ensureTechnicianExists(technicianId);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? ORDER BY l.start_date ASC, l.id ASC", technicianId);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("leaves", rows.stream().map(this::mapLeave).toList());
-        return data;
+        List<TechnicianLeaveResponse> leaves = rows.stream().map(this::mapLeave).toList();
+        return TechnicianLeaveListResponse.builder()
+                .leaves(leaves)
+                .page(0)
+                .size(leaves.size())
+                .totalElements((long) leaves.size())
+                .totalPages(1)
+                .last(true)
+                .build();
     }
 
     @Override
-    public Object getTechnicianLeaveById(Long technicianId, Long leaveId) {
+    public TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId) {
         ensureTechnicianExists(technicianId);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? AND l.id = ?", technicianId, leaveId);
         if (rows.isEmpty()) {
@@ -215,7 +274,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return mapLeave(rows.get(0));
     }
 
-    private Map<String, Object> mapActivity(Map<String, Object> row) {
+    private TechnicianActivityDto mapActivity(Map<String, Object> row) {
         String status = asString(row.get("status"));
         String workOrderId = asString(row.get("work_order_id"));
         String activity = switch (status) {
@@ -233,11 +292,11 @@ public class EamLookupServiceImpl implements EamLookupService {
             technicianName = "Unassigned";
         }
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("technicianName", technicianName);
-        data.put("activity", activity);
-        data.put("timeAgo", formatTimeAgo(asLocalDateTime(row.get("updated_at"))));
-        return data;
+        return TechnicianActivityDto.builder()
+                .technicianName(technicianName)
+                .activity(activity)
+                .timeAgo(formatTimeAgo(asLocalDateTime(row.get("updated_at"))))
+                .build();
     }
 
     private String workOrderSelect() {
@@ -268,19 +327,15 @@ public class EamLookupServiceImpl implements EamLookupService {
                 """;
     }
 
-    private Map<String, Object> mapTechnician(Map<String, Object> row) {
+    private TechnicianDetailsResponse mapTechnician(Map<String, Object> row) {
         Long technicianId = asLong(row.get("id"));
-        List<Map<String, Object>> memberships = jdbcTemplate.queryForList("""
+        List<TechnicianTeamMembershipResponse> memberships = jdbcTemplate.queryForList("""
                 SELECT m.team_id, tt.team_name, m.team_leader
                 FROM technician_team_members m
                 JOIN technician_teams tt ON tt.id = m.team_id
                 WHERE m.technician_id = ?
                 """, technicianId).stream().map(member -> {
-            Map<String, Object> map = new LinkedHashMap<>();
             Long teamId = asLong(member.get("team_id"));
-            map.put("teamId", teamId);
-            map.put("teamName", asString(member.get("team_name")));
-            map.put("teamLeader", truthy(member.get("team_leader")));
             List<String> leaderNames = jdbcTemplate.query("""
                             SELECT COALESCE(NULLIF(LTRIM(RTRIM(t.full_name)), ''),
                                             LTRIM(RTRIM(COALESCE(t.first_name, '') + ' ' + COALESCE(t.last_name, ''))))
@@ -290,8 +345,12 @@ public class EamLookupServiceImpl implements EamLookupService {
                             """,
                     (rs, rowNum) -> rs.getString(1),
                     teamId);
-            map.put("teamLeaderNames", leaderNames);
-            return map;
+            return TechnicianTeamMembershipResponse.builder()
+                    .teamId(teamId)
+                    .teamName(asString(member.get("team_name")))
+                    .teamLeader(truthy(member.get("team_leader")))
+                    .teamLeaderNames(leaderNames)
+                    .build();
         }).toList();
 
         LocalDate today = LocalDate.now();
@@ -310,35 +369,35 @@ public class EamLookupServiceImpl implements EamLookupService {
                   )
                 """, dayEnd, dayStart, technicianId, technicianId);
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("id", technicianId);
-        data.put("technicianId", asString(row.get("technician_id")));
-        data.put("badgeNumber", asString(row.get("badge_number")));
-        data.put("firstName", asString(row.get("first_name")));
-        data.put("lastName", asString(row.get("last_name")));
-        data.put("fullName", resolveFullName(asString(row.get("full_name")), asString(row.get("first_name")), asString(row.get("last_name"))));
-        data.put("technicianType", asString(row.get("technician_type")));
-        data.put("skills", asString(row.get("skills")));
-        data.put("phoneNumber", asString(row.get("phone_number")));
-        data.put("email", asString(row.get("email")));
-        data.put("address", asString(row.get("address")));
-        data.put("status", asString(row.get("status")));
-        data.put("workStatus", activeBookings > 0 ? "WORKING" : "AVAILABLE");
-        data.put("hireDate", asLocalDate(row.get("hire_date")));
-        data.put("workShift", asString(row.get("work_shift")));
-        data.put("technicianPhotoUrl", asString(row.get("technician_photo_url")));
-        data.put("certificateUrl", asString(row.get("certificate_url")));
-        data.put("certificateIssueDate", asLocalDate(row.get("certificate_issue_date")));
-        data.put("certificateExpiryDate", asLocalDate(row.get("certificate_expiry_date")));
-        data.put("terminationDate", asLocalDate(row.get("termination_date")));
-        data.put("certifications", asString(row.get("certifications")));
-        data.put("notes", asString(row.get("notes")));
-        data.put("teamLeader", memberships.stream().anyMatch(m -> truthy(m.get("teamLeader"))));
-        data.put("teamMemberships", memberships);
-        return data;
+        return TechnicianDetailsResponse.builder()
+                .id(technicianId)
+                .technicianId(asString(row.get("technician_id")))
+                .badgeNumber(asString(row.get("badge_number")))
+                .firstName(asString(row.get("first_name")))
+                .lastName(asString(row.get("last_name")))
+                .fullName(resolveFullName(asString(row.get("full_name")), asString(row.get("first_name")), asString(row.get("last_name"))))
+                .technicianType(asString(row.get("technician_type")))
+                .skills(asString(row.get("skills")))
+                .phoneNumber(asString(row.get("phone_number")))
+                .email(asString(row.get("email")))
+                .address(asString(row.get("address")))
+                .status(asString(row.get("status")))
+                .workStatus(activeBookings > 0 ? "WORKING" : "AVAILABLE")
+                .hireDate(asLocalDate(row.get("hire_date")))
+                .workShift(asString(row.get("work_shift")))
+                .technicianPhotoUrl(asString(row.get("technician_photo_url")))
+                .certificateUrl(asString(row.get("certificate_url")))
+                .certificateIssueDate(asLocalDate(row.get("certificate_issue_date")))
+                .certificateExpiryDate(asLocalDate(row.get("certificate_expiry_date")))
+                .terminationDate(asLocalDate(row.get("termination_date")))
+                .certifications(asString(row.get("certifications")))
+                .notes(asString(row.get("notes")))
+                .teamLeader(memberships.stream().anyMatch(TechnicianTeamMembershipResponse::isTeamLeader))
+                .teamMemberships(memberships)
+                .build();
     }
 
-    private Object buildAvailability(Long technicianId, Integer days) {
+    private List<DailyAvailabilityDto> buildAvailability(Long technicianId, Integer days) {
         int horizon = days == null ? 31 : Math.max(days, 1);
         LocalDate start = LocalDate.now();
         LocalDate endExclusive = start.plusDays(horizon);
@@ -388,7 +447,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                   )
                 """, endExclusive.atStartOfDay(), start.atStartOfDay(), technicianId, technicianId);
 
-        List<Map<String, Object>> response = new ArrayList<>();
+        List<DailyAvailabilityDto> response = new ArrayList<>();
         for (LocalDate d = start; d.isBefore(endExclusive); d = d.plusDays(1)) {
             LocalDateTime dayStart = d.atTime(9, 0);
             LocalDateTime dayEnd = d.atTime(21, 0);
@@ -402,8 +461,8 @@ public class EamLookupServiceImpl implements EamLookupService {
                     .sorted(Comparator.comparing(Window::start))
                     .toList();
 
-            List<Map<String, Object>> busyWindows;
-            List<Map<String, Object>> freeWindows;
+            List<TimeWindowDto> busyWindows;
+            List<TimeWindowDto> freeWindows;
             if ("HOLIDAY".equals(status) || "PTO".equals(status)) {
                 busyWindows = List.of(windowMap(dayStart.toLocalTime(), dayEnd.toLocalTime()));
                 freeWindows = List.of();
@@ -416,17 +475,17 @@ public class EamLookupServiceImpl implements EamLookupService {
                 }
             }
 
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("date", d);
-            item.put("status", status);
-            item.put("busyWindows", busyWindows);
-            item.put("freeWindows", freeWindows);
-            response.add(item);
+            response.add(DailyAvailabilityDto.builder()
+                    .date(d)
+                    .status(status)
+                    .busyWindows(busyWindows)
+                    .freeWindows(freeWindows)
+                    .build());
         }
         return response;
     }
 
-    private Map<String, Object> mapTeam(Map<String, Object> row) {
+    private TechnicianTeamDetailsResponse mapTeam(Map<String, Object> row) {
         Long teamId = asLong(row.get("id"));
         List<Map<String, Object>> technicianRows = jdbcTemplate.queryForList("""
                 SELECT t.id, t.technician_id, t.badge_number, t.first_name, t.last_name, t.full_name,
@@ -439,7 +498,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 WHERE m.team_id = ? AND t.is_deleted = 0
                 ORDER BY t.id
                 """, teamId);
-        List<Map<String, Object>> technicians = technicianRows.stream().map(this::mapTechnician).toList();
+        List<TechnicianDetailsResponse> technicians = technicianRows.stream().map(this::mapTechnician).toList();
 
         List<Map<String, Object>> leaderRows = jdbcTemplate.queryForList("""
                 SELECT TOP 1 t.id AS leader_id,
@@ -460,91 +519,77 @@ public class EamLookupServiceImpl implements EamLookupService {
                 FROM work_orders
                 WHERE deleted = 0
                   AND status IN ('SCHEDULED','IN_PROGRESS')
-                  AND assigned_team_id = ?
+                AND assigned_team_id = ?
                   AND planned_start_datetime < ?
                   AND planned_end_datetime > ?
                 """, teamId, dayEnd, dayStart);
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("id", teamId);
-        data.put("teamName", asString(row.get("team_name")));
-        data.put("teamDescription", asString(row.get("team_description")));
-        data.put("status", asString(row.get("status")));
-        data.put("startDate", asLocalDate(row.get("start_date")));
-        data.put("endDate", asLocalDate(row.get("end_date")));
-        data.put("notes", asString(row.get("notes")));
-        data.put("teamLeaderId", teamLeaderId);
-        data.put("teamLeaderName", teamLeaderName);
-        data.put("availability", activeBookings > 0 ? "Unavailable" : "Available");
-        data.put("technicians", technicians);
-        return data;
+        return TechnicianTeamDetailsResponse.builder()
+                .id(teamId)
+                .teamName(asString(row.get("team_name")))
+                .teamDescription(asString(row.get("team_description")))
+                .status(asString(row.get("status")))
+                .startDate(asLocalDate(row.get("start_date")))
+                .endDate(asLocalDate(row.get("end_date")))
+                .notes(asString(row.get("notes")))
+                .teamLeaderId(teamLeaderId)
+                .teamLeaderName(teamLeaderName)
+                .availability(activeBookings > 0 ? "Unavailable" : "Available")
+                .technicians(technicians)
+                .build();
     }
 
-    private Map<String, Object> mapWorkOrder(Map<String, Object> row) {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("id", asLong(row.get("id")));
-        data.put("workOrderNumber", asString(row.get("work_order_number")));
-        data.put("workOrderId", asString(row.get("work_order_id")));
-        data.put("workRequestTypeId", asLong(row.get("work_request_type_id")));
-        data.put("workRequestTypeCode", asString(row.get("work_request_type_code")));
-        data.put("workRequestTypeDescription", asString(row.get("work_request_type_description")));
-        data.put("location", asString(row.get("location")));
-        data.put("workType", asString(row.get("work_type")));
-        data.put("priority", asString(row.get("priority")));
-        data.put("woTitle", asString(row.get("wo_title")));
-        data.put("descriptionScope", asString(row.get("description_scope")));
-        data.put("planner", asString(row.get("planner")));
-        data.put("assignedTechnicianId", asLong(row.get("assigned_technician_id")));
-        data.put("assignedTechnicianName", asString(row.get("assigned_technician_name")));
-        data.put("assignedTeamId", asLong(row.get("assigned_team_id")));
-        data.put("assignedTeamName", asString(row.get("assigned_team_name")));
-        data.put("plannedStartDateTime", asLocalDateTime(row.get("planned_start_datetime")));
-        data.put("plannedEndDateTime", asLocalDateTime(row.get("planned_end_datetime")));
-        data.put("actualStartDateTime", asLocalDateTime(row.get("actual_start_datetime")));
-        data.put("actualEndDateTime", asLocalDateTime(row.get("actual_end_datetime")));
-        data.put("targetCompletionDate", asLocalDate(row.get("target_completion_date")));
-        data.put("status", asString(row.get("status")));
-        data.put("source", asString(row.get("source")));
-        data.put("createdAt", asLocalDateTime(row.get("created_at")));
-        data.put("updatedAt", asLocalDateTime(row.get("updated_at")));
-        return data;
+    private WorkOrderDetailsResponse mapWorkOrder(Map<String, Object> row) {
+        return WorkOrderDetailsResponse.builder()
+                .id(asLong(row.get("id")))
+                .workOrderNumber(asString(row.get("work_order_number")))
+                .workOrderId(asString(row.get("work_order_id")))
+                .workRequestTypeId(asLong(row.get("work_request_type_id")))
+                .workRequestTypeCode(asString(row.get("work_request_type_code")))
+                .workRequestTypeDescription(asString(row.get("work_request_type_description")))
+                .location(asString(row.get("location")))
+                .workType(asString(row.get("work_type")))
+                .priority(asString(row.get("priority")))
+                .woTitle(asString(row.get("wo_title")))
+                .descriptionScope(asString(row.get("description_scope")))
+                .planner(asString(row.get("planner")))
+                .assignedTechnicianId(asLong(row.get("assigned_technician_id")))
+                .assignedTechnicianName(asString(row.get("assigned_technician_name")))
+                .assignedTeamId(asLong(row.get("assigned_team_id")))
+                .assignedTeamName(asString(row.get("assigned_team_name")))
+                .plannedStartDateTime(asLocalDateTime(row.get("planned_start_datetime")))
+                .plannedEndDateTime(asLocalDateTime(row.get("planned_end_datetime")))
+                .actualStartDateTime(asLocalDateTime(row.get("actual_start_datetime")))
+                .actualEndDateTime(asLocalDateTime(row.get("actual_end_datetime")))
+                .targetCompletionDate(asLocalDate(row.get("target_completion_date")))
+                .status(asString(row.get("status")))
+                .source(asString(row.get("source")))
+                .createdAt(asLocalDateTime(row.get("created_at")))
+                .updatedAt(asLocalDateTime(row.get("updated_at")))
+                .build();
     }
 
-    private Map<String, Object> mapHoliday(Map<String, Object> row) {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("id", asLong(row.get("id")));
-        data.put("holidayName", asString(row.get("holiday_name")));
-        data.put("holidayType", asString(row.get("holiday_type")));
-        data.put("holidayDate", asLocalDate(row.get("holiday_date")));
-        data.put("notes", asString(row.get("notes")));
-        data.put("createdAt", asLocalDateTime(row.get("created_at")));
-        return data;
+    private TechnicianHolidayResponse mapHoliday(Map<String, Object> row) {
+        return TechnicianHolidayResponse.builder()
+                .id(asLong(row.get("id")))
+                .holidayName(asString(row.get("holiday_name")))
+                .holidayType(asString(row.get("holiday_type")))
+                .holidayDate(asLocalDate(row.get("holiday_date")))
+                .notes(asString(row.get("notes")))
+                .createdAt(asLocalDateTime(row.get("created_at")))
+                .build();
     }
 
-    private Map<String, Object> mapLeave(Map<String, Object> row) {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("id", asLong(row.get("id")));
-        data.put("technicianId", asLong(row.get("technician_id")));
-        data.put("technicianName", asString(row.get("technician_name")));
-        data.put("startDate", asLocalDate(row.get("start_date")));
-        data.put("endDate", asLocalDate(row.get("end_date")));
-        data.put("reason", asString(row.get("reason")));
-        data.put("createdAt", asLocalDateTime(row.get("created_at")));
-        return data;
-    }
-
-    private Map<String, Object> paged(String key, List<Map<String, Object>> items, int page, int size, long totalElements) {
-        int totalPages = size <= 0 ? 0 : (int) Math.ceil((double) totalElements / size);
-        boolean last = page >= Math.max(totalPages - 1, 0);
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put(key, items);
-        data.put("page", page);
-        data.put("size", size);
-        data.put("totalElements", totalElements);
-        data.put("totalPages", totalPages);
-        data.put("last", last);
-        return data;
+    private TechnicianLeaveResponse mapLeave(Map<String, Object> row) {
+        return TechnicianLeaveResponse.builder()
+                .id(asLong(row.get("id")))
+                .technicianId(asLong(row.get("technician_id")))
+                .technicianName(asString(row.get("technician_name")))
+                .startDate(asLocalDate(row.get("start_date")))
+                .endDate(asLocalDate(row.get("end_date")))
+                .reason(asString(row.get("reason")))
+                .createdAt(asLocalDateTime(row.get("created_at")))
+                .build();
     }
 
     private void ensureTechnicianExists(Long technicianId) {
@@ -615,11 +660,11 @@ public class EamLookupServiceImpl implements EamLookupService {
         return free;
     }
 
-    private Map<String, Object> windowMap(LocalTime start, LocalTime end) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("start", start);
-        map.put("end", end);
-        return map;
+    private TimeWindowDto windowMap(LocalTime start, LocalTime end) {
+        return TimeWindowDto.builder()
+                .start(start)
+                .end(end)
+                .build();
     }
 
     private boolean truthy(Object value) {

@@ -19,14 +19,14 @@ public class EamLookupController {
     private final EamLookupService eamLookupService;
 
     @GetMapping("/dashboard/technicians")
-    public ResponseEntity<ApiResponse<Object>> getDashboardTechnicians(
+    public ResponseEntity<ApiResponse<?>> getDashboardTechnicians(
             @RequestParam(value = "limit", required = false) Integer limit) {
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(), "Technician dashboard fetched", eamLookupService.getDashboardTechnicians(limit)));
     }
 
     @GetMapping("/technicians")
-    public ResponseEntity<ApiResponse<Object>> getTechnicians(
+    public ResponseEntity<ApiResponse<?>> getTechnicians(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
         return ResponseEntity.ok(ApiResponse.successResponse(
@@ -34,7 +34,7 @@ public class EamLookupController {
     }
 
     @GetMapping("/technicians/{id}/availability/monthly")
-    public ResponseEntity<ApiResponse<Object>> getTechnicianAvailabilityMonthly(
+    public ResponseEntity<ApiResponse<?>> getTechnicianAvailabilityMonthly(
             @PathVariable("id") Long technicianId,
             @RequestParam(value = "days", required = false) Integer days) {
         return ResponseEntity.ok(ApiResponse.successResponse(
@@ -44,7 +44,7 @@ public class EamLookupController {
     }
 
     @GetMapping("/technician-teams")
-    public ResponseEntity<ApiResponse<Object>> getTechnicianTeams(
+    public ResponseEntity<ApiResponse<?>> getTechnicianTeams(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
         return ResponseEntity.ok(ApiResponse.successResponse(
@@ -52,7 +52,7 @@ public class EamLookupController {
     }
 
     @GetMapping("/work-orders")
-    public ResponseEntity<ApiResponse<Object>> getWorkOrders(
+    public ResponseEntity<ApiResponse<?>> getWorkOrders(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
         return ResponseEntity.ok(ApiResponse.successResponse(
@@ -60,13 +60,13 @@ public class EamLookupController {
     }
 
     @GetMapping("/work-orders/{id}")
-    public ResponseEntity<ApiResponse<Object>> getWorkOrderById(@PathVariable("id") Long workOrderId) {
+    public ResponseEntity<ApiResponse<?>> getWorkOrderById(@PathVariable("id") Long workOrderId) {
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(), "Work order details fetched successfully", eamLookupService.getWorkOrderById(workOrderId)));
     }
 
     @GetMapping("/holidays")
-    public ResponseEntity<ApiResponse<Object>> getHolidays(
+    public ResponseEntity<ApiResponse<?>> getHolidays(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "100") int size) {
         return ResponseEntity.ok(ApiResponse.successResponse(
@@ -74,13 +74,13 @@ public class EamLookupController {
     }
 
     @GetMapping("/holidays/{id}")
-    public ResponseEntity<ApiResponse<Object>> getHolidayById(@PathVariable("id") Long holidayId) {
+    public ResponseEntity<ApiResponse<?>> getHolidayById(@PathVariable("id") Long holidayId) {
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(), "Holiday fetched successfully", eamLookupService.getHolidayById(holidayId)));
     }
 
     @GetMapping("/technicians/leaves")
-    public ResponseEntity<ApiResponse<Object>> getTechniciansLeaves(
+    public ResponseEntity<ApiResponse<?>> getTechniciansLeaves(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "100") int size) {
         return ResponseEntity.ok(ApiResponse.successResponse(
@@ -88,13 +88,13 @@ public class EamLookupController {
     }
 
     @GetMapping("/technicians/{id}/leaves")
-    public ResponseEntity<ApiResponse<Object>> getTechnicianLeaves(@PathVariable("id") Long technicianId) {
+    public ResponseEntity<ApiResponse<?>> getTechnicianLeaves(@PathVariable("id") Long technicianId) {
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(), "Technician leaves fetched successfully", eamLookupService.getTechnicianLeaves(technicianId)));
     }
 
     @GetMapping("/technicians/{id}/leaves/{leaveId}")
-    public ResponseEntity<ApiResponse<Object>> getTechnicianLeaveById(
+    public ResponseEntity<ApiResponse<?>> getTechnicianLeaveById(
             @PathVariable("id") Long technicianId,
             @PathVariable("leaveId") Long leaveId) {
         return ResponseEntity.ok(ApiResponse.successResponse(

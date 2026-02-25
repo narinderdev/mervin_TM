@@ -1,26 +1,38 @@
 package com.example.tm.eam.service;
 
+import com.example.tm.eam.dto.DailyAvailabilityDto;
+import com.example.tm.eam.dto.TechnicianDashboardResponse;
+import com.example.tm.eam.dto.TechnicianHolidayListResponse;
+import com.example.tm.eam.dto.TechnicianHolidayResponse;
+import com.example.tm.eam.dto.TechnicianLeaveListResponse;
+import com.example.tm.eam.dto.TechnicianLeaveResponse;
+import com.example.tm.eam.dto.TechnicianListResponse;
+import com.example.tm.eam.dto.TechnicianTeamListResponse;
+import com.example.tm.eam.dto.WorkOrderDetailsResponse;
+import com.example.tm.eam.dto.WorkOrderListResponse;
+import java.util.List;
+
 public interface EamLookupService {
 
-    Object getDashboardTechnicians(Integer limit);
+    TechnicianDashboardResponse getDashboardTechnicians(Integer limit);
 
-    Object getTechnicians(int page, int size);
+    TechnicianListResponse getTechnicians(int page, int size);
 
-    Object getTechnicianAvailabilityMonthly(Long technicianId, Integer days);
+    List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days);
 
-    Object getTechnicianTeams(int page, int size);
+    TechnicianTeamListResponse getTechnicianTeams(int page, int size);
 
-    Object getWorkOrders(int page, int size);
+    WorkOrderListResponse getWorkOrders(int page, int size);
 
-    Object getWorkOrderById(Long workOrderId);
+    WorkOrderDetailsResponse getWorkOrderById(Long workOrderId);
 
-    Object getHolidays(int page, int size);
+    TechnicianHolidayListResponse getHolidays(int page, int size);
 
-    Object getHolidayById(Long holidayId);
+    TechnicianHolidayResponse getHolidayById(Long holidayId);
 
-    Object getTechniciansLeaves(int page, int size);
+    TechnicianLeaveListResponse getTechniciansLeaves(int page, int size);
 
-    Object getTechnicianLeaves(Long technicianId);
+    TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId);
 
-    Object getTechnicianLeaveById(Long technicianId, Long leaveId);
+    TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId);
 }

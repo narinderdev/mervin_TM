@@ -32,13 +32,6 @@ repositories {
 	mavenCentral()
 }
 
-sourceSets {
-	main {
-		java {
-			exclude 'com/example/eam/**'
-		}
-	}
-}
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
