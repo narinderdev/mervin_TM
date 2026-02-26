@@ -34,15 +34,15 @@ public class TimesheetRowRequestDto {
     private BigDecimal dailyTotal;
 
     @NotBlank
-    @JsonProperty("accounting_unit")
-    private String accountingUnit;
+    @JsonProperty("department")
+    private String department;
 
     @NotBlank
-    @JsonProperty("ferc")
-    private String ferc;
+    @JsonProperty("account")
+    private String account;
 
-    @JsonProperty("activity")
-    private String activity;
+    @JsonProperty("project")
+    private String project;
 
     @JsonProperty("comment")
     private String comment;
@@ -91,28 +91,28 @@ public class TimesheetRowRequestDto {
         this.dailyTotal = dailyTotal;
     }
 
-    public String getAccountingUnit() {
-        return accountingUnit;
+    public String getDepartment() {
+        return department;
     }
 
-    public void setAccountingUnit(String accountingUnit) {
-        this.accountingUnit = accountingUnit;
+    public void setDepartment(String department) {
+        this.department = department;
     }
 
-    public String getFerc() {
-        return ferc;
+    public String getAccount() {
+        return account;
     }
 
-    public void setFerc(String ferc) {
-        this.ferc = ferc;
+    public void setAccount(String account) {
+        this.account = account;
     }
 
-    public String getActivity() {
-        return activity;
+    public String getProject() {
+        return project;
     }
 
-    public void setActivity(String activity) {
-        this.activity = activity;
+    public void setProject(String project) {
+        this.project = project;
     }
 
     public String getComment() {

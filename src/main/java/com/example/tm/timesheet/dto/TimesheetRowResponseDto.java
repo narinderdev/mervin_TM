@@ -18,9 +18,9 @@ public class TimesheetRowResponseDto {
     private String payCode;
     private BigDecimal hours;
     private BigDecimal dailyTotal;
-    private String accountingUnit;
-    private String ferc;
-    private String activity;
+    private String department;
+    private String account;
+    private String project;
     private String comment;
     private Boolean isDeleted;
 }

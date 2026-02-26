@@ -18,6 +18,9 @@ public class TimesheetResponseDto {
     private LocalDate periodEndDate;
     private String viewType;
     private Long technicianId;
+    private String technicianFirstName;
+    private String technicianLastName;
+    private String technicianName;
     private BigDecimal totalWorked;
     private BigDecimal totalNonWorked;
     private BigDecimal totalPremium;

@@ -1,5 +1,7 @@
 package com.example.tm.timesheet.service;
 
+import com.example.tm.auth.entity.TmUser;
+import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.shared.exception.ResourceNotFoundException;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRowRequestDto;
@@ -21,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class TimesheetServiceImpl implements TimesheetService {
 
     private final TimesheetRepository timesheetRepository;
+    private final TmUserRepository tmUserRepository;
 
     @Override
     public TimesheetResponseDto create(TimesheetRequestDto requestDto) {
@@ -106,21 +109,35 @@ public class TimesheetServiceImpl implements TimesheetService {
         row.setPayCode(rowDto.getPayCode());
         row.setHours(rowDto.getHours());
         row.setDailyTotal(rowDto.getDailyTotal());
-        row.setAccountingUnit(rowDto.getAccountingUnit());
-        row.setFerc(rowDto.getFerc());
-        row.setActivity(rowDto.getActivity());
+        row.setDepartment(rowDto.getDepartment());
+        row.setAccount(rowDto.getAccount());
+        row.setProject(rowDto.getProject());
         row.setComment(rowDto.getComment());
         row.setIsDeleted(rowDto.getIsDeleted());
         return row;
     }
 
     private TimesheetResponseDto toResponse(Timesheet entity) {
+        TmUser technician = entity.getTechnicianId() == null
+                ? null
+                : tmUserRepository.findById(entity.getTechnicianId()).orElse(null);
+
+        String technicianFirstName = technician == null ? null : technician.getFirstName();
+        String technicianLastName = technician == null ? null : technician.getLastName();
+        String technicianName = (technicianFirstName == null && technicianLastName == null)
+                ? null
+                : String.join(" ", technicianFirstName == null ? "" : technicianFirstName,
+                        technicianLastName == null ? "" : technicianLastName).trim();
+
         return TimesheetResponseDto.builder()
                 .id(entity.getId())
                 .periodStartDate(entity.getPeriodStartDate())
                 .periodEndDate(entity.getPeriodEndDate())
                 .viewType(entity.getViewType())
                 .technicianId(entity.getTechnicianId())
+                .technicianFirstName(technicianFirstName)
+                .technicianLastName(technicianLastName)
+                .technicianName(technicianName)
                 .totalWorked(entity.getTotalWorked())
                 .totalNonWorked(entity.getTotalNonWorked())
                 .totalPremium(entity.getTotalPremium())
@@ -140,9 +157,9 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .payCode(row.getPayCode())
                 .hours(row.getHours())
                 .dailyTotal(row.getDailyTotal())
-                .accountingUnit(row.getAccountingUnit())
-                .ferc(row.getFerc())
-                .activity(row.getActivity())
+                .department(row.getDepartment())
+                .account(row.getAccount())
+                .project(row.getProject())
                 .comment(row.getComment())
                 .isDeleted(row.getIsDeleted())
                 .build();

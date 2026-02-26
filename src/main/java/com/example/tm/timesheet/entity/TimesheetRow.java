@@ -39,14 +39,14 @@ public class TimesheetRow {
     @Column(name = "daily_total", precision = 8, scale = 2)
     private BigDecimal dailyTotal;
 
-    @Column(name = "accounting_unit", length = 100)
-    private String accountingUnit;
+    @Column(name = "department", length = 100)
+    private String department;
 
-    @Column(name = "ferc", length = 100)
-    private String ferc;
+    @Column(name = "account", length = 100)
+    private String account;
 
-    @Column(name = "activity", length = 255)
-    private String activity;
+    @Column(name = "project", length = 255)
+    private String project;
 
     @Column(length = 2000)
     private String comment;
