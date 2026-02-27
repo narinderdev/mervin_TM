@@ -98,7 +98,14 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setTotalWorked(requestDto.getTotalWorked());
         entity.setTotalNonWorked(requestDto.getTotalNonWorked());
         entity.setTotalPremium(requestDto.getTotalPremium());
-        entity.clearDays();
+        // For updates, remove existing days and flush so unique (timesheet_id, date) constraints
+        // are cleared before inserting replacement rows.
+        if (entity.getId() != null && !entity.getTimesheetDays().isEmpty()) {
+            entity.clearDays();
+            timesheetRepository.saveAndFlush(entity);
+        } else {
+            entity.clearDays();
+        }
         requestDto.getTimesheetDays().forEach(dayDto -> {
             TimesheetDay day = toDayEntity(dayDto);
             dayDto.getRows()

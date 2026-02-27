@@ -45,3 +45,5 @@ src/.env
 .gradle-home/
 
 logs/
+
+src/main/java/com/example/eam1/*
