@@ -49,8 +49,8 @@ public class TimesheetRequestDto {
 
     @NotEmpty
     @Valid
-    @JsonProperty("timesheet_rows")
-    private List<TimesheetRowRequestDto> timesheetRows;
+    @JsonProperty("timesheet_days")
+    private List<TimesheetDayRequestDto> timesheetDays;
 
     public LocalDate getPeriodStartDate() {
         return periodStartDate;
@@ -108,11 +108,11 @@ public class TimesheetRequestDto {
         this.totalPremium = totalPremium;
     }
 
-    public List<TimesheetRowRequestDto> getTimesheetRows() {
-        return timesheetRows;
+    public List<TimesheetDayRequestDto> getTimesheetDays() {
+        return timesheetDays;
     }
 
-    public void setTimesheetRows(List<TimesheetRowRequestDto> timesheetRows) {
-        this.timesheetRows = timesheetRows;
+    public void setTimesheetDays(List<TimesheetDayRequestDto> timesheetDays) {
+        this.timesheetDays = timesheetDays;
     }
 }

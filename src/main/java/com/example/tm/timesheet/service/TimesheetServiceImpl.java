@@ -3,11 +3,14 @@ package com.example.tm.timesheet.service;
 import com.example.tm.auth.entity.TmUser;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.shared.exception.ResourceNotFoundException;
+import com.example.tm.timesheet.dto.TimesheetDayRequestDto;
+import com.example.tm.timesheet.dto.TimesheetDayResponseDto;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRowRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRowResponseDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.entity.Timesheet;
+import com.example.tm.timesheet.entity.TimesheetDay;
 import com.example.tm.timesheet.entity.TimesheetRow;
 import com.example.tm.timesheet.repo.TimesheetRepository;
 import java.util.List;
@@ -95,26 +98,15 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setTotalWorked(requestDto.getTotalWorked());
         entity.setTotalNonWorked(requestDto.getTotalNonWorked());
         entity.setTotalPremium(requestDto.getTotalPremium());
-        entity.clearRows();
-        requestDto.getTimesheetRows()
-                .stream()
-                .map(this::toRowEntity)
-                .forEach(entity::addRow);
-    }
-
-    private TimesheetRow toRowEntity(TimesheetRowRequestDto rowDto) {
-        TimesheetRow row = new TimesheetRow();
-        row.setDate(rowDto.getDate());
-        row.setDayOfWeek(rowDto.getDayOfWeek());
-        row.setPayCode(rowDto.getPayCode());
-        row.setHours(rowDto.getHours());
-        row.setDailyTotal(rowDto.getDailyTotal());
-        row.setDepartment(rowDto.getDepartment());
-        row.setAccount(rowDto.getAccount());
-        row.setProject(rowDto.getProject());
-        row.setComment(rowDto.getComment());
-        row.setIsDeleted(rowDto.getIsDeleted());
-        return row;
+        entity.clearDays();
+        requestDto.getTimesheetDays().forEach(dayDto -> {
+            TimesheetDay day = toDayEntity(dayDto);
+            dayDto.getRows()
+                    .stream()
+                    .map(rowDto -> toRowEntity(day, rowDto))
+                    .forEach(day::addRow);
+            entity.addDay(day);
+        });
     }
 
     private TimesheetResponseDto toResponse(Timesheet entity) {
@@ -129,6 +121,11 @@ public class TimesheetServiceImpl implements TimesheetService {
                 : String.join(" ", technicianFirstName == null ? "" : technicianFirstName,
                         technicianLastName == null ? "" : technicianLastName).trim();
 
+        List<TimesheetDayResponseDto> days = entity.getTimesheetDays()
+                .stream()
+                .map(this::toDayResponse)
+                .toList();
+
         return TimesheetResponseDto.builder()
                 .id(entity.getId())
                 .periodStartDate(entity.getPeriodStartDate())
@@ -142,24 +139,48 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .totalNonWorked(entity.getTotalNonWorked())
                 .totalPremium(entity.getTotalPremium())
                 .status(entity.getStatus() == null ? "PENDING" : entity.getStatus())
-                .timesheetRows(entity.getTimesheetRows()
-                        .stream()
-                        .map(this::toRowResponse)
-                        .toList())
+                .timesheetDays(days)
+                .build();
+    }
+
+    private TimesheetDay toDayEntity(TimesheetDayRequestDto dayDto) {
+        TimesheetDay day = new TimesheetDay();
+        day.setDate(dayDto.getDate());
+        day.setDayOfWeek(dayDto.getDayOfWeek());
+        day.setDailyTotal(dayDto.getDailyTotal());
+        return day;
+    }
+
+    private TimesheetRow toRowEntity(TimesheetDay day, TimesheetRowRequestDto rowDto) {
+        TimesheetRow row = new TimesheetRow();
+        row.setTimesheetDay(day);
+        row.setPayCode(rowDto.getPayCode());
+        row.setHours(rowDto.getHours());
+        row.setAccountingUnit(rowDto.getAccountingUnit());
+        row.setFerc(rowDto.getFerc());
+        row.setActivity(rowDto.getActivity());
+        row.setComment(rowDto.getComment());
+        row.setIsDeleted(rowDto.getIsDeleted());
+        return row;
+    }
+
+    private TimesheetDayResponseDto toDayResponse(TimesheetDay day) {
+        return TimesheetDayResponseDto.builder()
+                .date(day.getDate())
+                .dayOfWeek(day.getDayOfWeek())
+                .dailyTotal(day.getDailyTotal())
+                .rows(day.getRows().stream().map(this::toRowResponse).toList())
                 .build();
     }
 
     private TimesheetRowResponseDto toRowResponse(TimesheetRow row) {
         return TimesheetRowResponseDto.builder()
                 .id(row.getId())
-                .date(row.getDate())
-                .dayOfWeek(row.getDayOfWeek())
                 .payCode(row.getPayCode())
                 .hours(row.getHours())
-                .dailyTotal(row.getDailyTotal())
-                .department(row.getDepartment())
-                .account(row.getAccount())
-                .project(row.getProject())
+                .accountingUnit(row.getAccountingUnit())
+                .ferc(row.getFerc())
+                .activity(row.getActivity())
                 .comment(row.getComment())
                 .isDeleted(row.getIsDeleted())
                 .build();

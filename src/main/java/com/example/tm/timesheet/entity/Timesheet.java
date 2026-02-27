@@ -12,7 +12,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import jakarta.persistence.Column;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -51,15 +50,15 @@ public class Timesheet {
     private String status;
 
     @OneToMany(mappedBy = "timesheet", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<TimesheetRow> timesheetRows = new ArrayList<>();
+    private List<TimesheetDay> timesheetDays = new ArrayList<>();
 
-    public void addRow(TimesheetRow row) {
-        row.setTimesheet(this);
-        this.timesheetRows.add(row);
+    public void addDay(TimesheetDay day) {
+        day.setTimesheet(this);
+        this.timesheetDays.add(day);
     }
 
-    public void clearRows() {
-        this.timesheetRows.forEach(row -> row.setTimesheet(null));
-        this.timesheetRows.clear();
+    public void clearDays() {
+        this.timesheetDays.forEach(day -> day.setTimesheet(null));
+        this.timesheetDays.clear();
     }
 }

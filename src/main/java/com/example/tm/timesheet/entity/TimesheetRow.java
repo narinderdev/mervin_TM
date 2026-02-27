@@ -1,7 +1,6 @@
 package com.example.tm.timesheet.entity;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -24,29 +23,20 @@ public class TimesheetRow {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "date")
-    private LocalDate date;
-
-    @Column(name = "day_of_week", length = 20)
-    private String dayOfWeek;
-
     @Column(name = "pay_code", length = 50)
     private String payCode;
 
     @Column(name = "hours", precision = 8, scale = 2)
     private BigDecimal hours;
 
-    @Column(name = "daily_total", precision = 8, scale = 2)
-    private BigDecimal dailyTotal;
+    @Column(name = "accounting_unit", length = 100)
+    private String accountingUnit;
 
-    @Column(name = "department", length = 100)
-    private String department;
+    @Column(name = "ferc", length = 100)
+    private String ferc;
 
-    @Column(name = "account", length = 100)
-    private String account;
-
-    @Column(name = "project", length = 255)
-    private String project;
+    @Column(name = "activity", length = 255)
+    private String activity;
 
     @Column(length = 2000)
     private String comment;
@@ -55,6 +45,6 @@ public class TimesheetRow {
     private Boolean isDeleted;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "timesheet_id", nullable = false)
-    private Timesheet timesheet;
+    @JoinColumn(name = "timesheet_day_id", nullable = false)
+    private TimesheetDay timesheetDay;
 }

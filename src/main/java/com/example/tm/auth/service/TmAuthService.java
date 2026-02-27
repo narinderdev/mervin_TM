@@ -7,6 +7,8 @@ import com.example.tm.auth.dto.UserSummaryDto;
 import com.example.tm.auth.entity.TmUser;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.auth.security.TmJwtService;
+import java.util.List;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -63,6 +65,14 @@ public class TmAuthService {
                 .user(toUserSummary(user))
                 .mfaRequired(false)
                 .build();
+    }
+
+    @Transactional(readOnly = true)
+    public List<UserSummaryDto> getLoggedInUsers() {
+        return tmUserRepository.findByActiveTrue()
+                .stream()
+                .map(this::toUserSummary)
+                .collect(Collectors.toList());
     }
 
     private UserSummaryDto toUserSummary(TmUser user) {
