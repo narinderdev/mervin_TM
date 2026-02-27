@@ -5,11 +5,13 @@ import com.example.tm.auth.dto.LoginResponseDto;
 import com.example.tm.auth.dto.SignupRequestDto;
 import com.example.tm.auth.dto.UserSummaryDto;
 import com.example.tm.auth.entity.TmUser;
+import com.example.tm.auth.entity.TmUserInvite;
 import com.example.tm.auth.integration.eam.EamUser;
 import com.example.tm.auth.integration.eam.EamUserRole;
 import com.example.tm.auth.integration.eam.EamUserStatus;
 import com.example.tm.auth.integration.eam.EamUserRepository;
 import com.example.tm.auth.repository.TmUserRepository;
+import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.security.TmJwtService;
 import java.util.List;
 import java.util.Optional;
@@ -27,6 +29,7 @@ public class TmAuthService {
 
     private final TmUserRepository tmUserRepository;
     private final EamUserRepository eamUserRepository;
+    private final TmUserInviteRepository inviteRepository;
     private final TmJwtService tmJwtService;
     private final PasswordEncoder passwordEncoder;
 
@@ -36,6 +39,7 @@ public class TmAuthService {
         if (tmUserRepository.existsByEmailIgnoreCase(normalizedEmail)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already registered");
         }
+        rejectActiveInvite(normalizedEmail);
 
         boolean firstUser = tmUserRepository.count() == 0;
 
@@ -137,5 +141,11 @@ public class TmAuthService {
                         .map(r -> r.getName().trim())
                         .filter(name -> !name.isEmpty())
                         .findFirst();
+    }
+
+    private void rejectActiveInvite(String normalizedEmail) {
+        if (inviteRepository.existsByEmailAndAcceptedFalse(normalizedEmail)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "An invite is already pending for this email");
+        }
     }
 }
