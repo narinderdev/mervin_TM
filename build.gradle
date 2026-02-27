@@ -22,6 +22,15 @@ java {
 	}
 }
 
+sourceSets {
+	main {
+		java {
+			// Exclude the reference EAM codebase; we re-map only the pieces we need in tm.auth.integration.eam
+			exclude 'com/example/eam1/**'
+		}
+	}
+}
+
 configurations {
 	compileOnly {
 		extendsFrom annotationProcessor
@@ -44,6 +53,7 @@ dependencies {
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
 	implementation "org.flywaydb:flyway-core:11.20.2"
 	implementation "org.flywaydb:flyway-sqlserver:11.20.2"
+	implementation 'org.springframework.boot:spring-boot-starter-security' // needed for shared BCrypt config and security annotations
 	compileOnly 'org.projectlombok:lombok:1.18.38'
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	runtimeOnly 'com.microsoft.sqlserver:mssql-jdbc'

@@ -5,9 +5,14 @@ import com.example.tm.auth.dto.LoginResponseDto;
 import com.example.tm.auth.dto.SignupRequestDto;
 import com.example.tm.auth.dto.UserSummaryDto;
 import com.example.tm.auth.entity.TmUser;
+import com.example.tm.auth.integration.eam.EamUser;
+import com.example.tm.auth.integration.eam.EamUserRole;
+import com.example.tm.auth.integration.eam.EamUserStatus;
+import com.example.tm.auth.integration.eam.EamUserRepository;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.auth.security.TmJwtService;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,6 +26,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class TmAuthService {
 
     private final TmUserRepository tmUserRepository;
+    private final EamUserRepository eamUserRepository;
     private final TmJwtService tmJwtService;
     private final PasswordEncoder passwordEncoder;
 
@@ -49,15 +55,9 @@ public class TmAuthService {
     public LoginResponseDto login(LoginRequestDto request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
         TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+                .orElseGet(() -> syncFromEam(normalizedEmail, request.getPassword()));
 
-        if (!Boolean.TRUE.equals(user.getActive())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
-        }
-
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
-        }
+        validatePasswordAndStatus(request.getPassword(), user);
 
         String token = tmJwtService.generateAccessToken(user);
         return LoginResponseDto.builder()
@@ -88,5 +88,54 @@ public class TmAuthService {
 
     private String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase();
+    }
+
+    private void validatePasswordAndStatus(String rawPassword, TmUser user) {
+        if (!Boolean.TRUE.equals(user.getActive())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
+        }
+        if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+        }
+    }
+
+    /**
+     * If the user exists in EAM but not yet in TM, create/sync a TM user using the
+     * same hashed password. This lets EAM users log into TM without resetting passwords.
+     */
+    private TmUser syncFromEam(String normalizedEmail, String rawPassword) {
+        EamUser eamUser = eamUserRepository.findByEmailAndDeletedFalse(normalizedEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+
+        if (eamUser.getStatus() != EamUserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
+        }
+
+        String eamPasswordHash = eamUser.getPassword();
+        if (eamPasswordHash == null || !passwordEncoder.matches(rawPassword, eamPasswordHash)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+        }
+
+        TmUser user = new TmUser();
+        user.setFirstName(eamUser.getFirstName());
+        user.setLastName(eamUser.getLastName());
+        user.setEmail(normalizedEmail);
+        user.setPasswordHash(eamPasswordHash); // already bcrypt-hashed in EAM
+        user.setRole(resolveRole(eamUser).orElse("Technician"));
+        user.setActive(true);
+
+        return tmUserRepository.save(user);
+    }
+
+    private Optional<String> resolveRole(EamUser eamUser) {
+        return eamUser.getUserRoles() == null
+                ? Optional.empty()
+                : eamUser.getUserRoles()
+                        .stream()
+                        .map(EamUserRole::getRole)
+                        .filter(r -> r != null && r.getName() != null)
+                        .map(r -> r.getName().trim())
+                        .filter(name -> !name.isEmpty())
+                        .findFirst();
     }
 }
