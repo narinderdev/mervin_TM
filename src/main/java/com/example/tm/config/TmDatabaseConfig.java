@@ -24,7 +24,8 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
 @EnableJpaRepositories(
         basePackages = {
                 "com.example.tm.timesheet.repo",
-                "com.example.tm.auth.repository"
+                "com.example.tm.auth.repository",
+                "com.example.tm.team.repo"
         },
         entityManagerFactoryRef = "tmEntityManagerFactory",
         transactionManagerRef = "tmTransactionManager")
@@ -48,7 +49,8 @@ public class TmDatabaseConfig {
         factory.setDataSource(tmDataSource);
         factory.setPackagesToScan(
                 "com.example.tm.timesheet.entity",
-                "com.example.tm.auth.entity");
+                "com.example.tm.auth.entity",
+                "com.example.tm.team.entity");
         factory.setPersistenceUnitName("tm");
 
         HibernateJpaVendorAdapter vendorAdapter = new HibernateJpaVendorAdapter();
