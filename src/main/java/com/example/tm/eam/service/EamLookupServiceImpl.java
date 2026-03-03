@@ -1,6 +1,7 @@
 package com.example.tm.eam.service;
 
 import com.example.tm.eam.dto.DailyAvailabilityDto;
+import com.example.tm.eam.dto.TechnicianCreateRequest;
 import com.example.tm.eam.dto.TechnicianActivityDto;
 import com.example.tm.eam.dto.TechnicianDashboardResponse;
 import com.example.tm.eam.dto.TechnicianDetailsResponse;
@@ -9,9 +10,12 @@ import com.example.tm.eam.dto.TechnicianHolidayResponse;
 import com.example.tm.eam.dto.TechnicianLeaveListResponse;
 import com.example.tm.eam.dto.TechnicianLeaveResponse;
 import com.example.tm.eam.dto.TechnicianListResponse;
+import com.example.tm.eam.dto.TechnicianPatchRequest;
+import com.example.tm.eam.dto.TechnicianTeamCreateRequest;
 import com.example.tm.eam.dto.TechnicianTeamDetailsResponse;
 import com.example.tm.eam.dto.TechnicianTeamListResponse;
 import com.example.tm.eam.dto.TechnicianTeamMembershipResponse;
+import com.example.tm.eam.dto.TechnicianTeamPatchRequest;
 import com.example.tm.eam.dto.TimeWindowDto;
 import com.example.tm.eam.dto.WorkOrderDetailsResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
@@ -24,12 +28,17 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @RequiredArgsConstructor
@@ -95,6 +104,168 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
+    public TechnicianDetailsResponse createTechnician(TechnicianCreateRequest request) {
+        String firstName = requireNonBlank(request.getFirstName(), "First name is required");
+        String lastName = requireNonBlank(request.getLastName(), "Last name is required");
+        String badgeNumber = requireBadgeUnique(request.getBadgeNumber(), null);
+        String technicianId = determineTechnicianId(request.getTechnicianId(), null);
+        String technicianType = normalizeUpperDefault(request.getTechnicianType(), "FULL_TIME");
+        String status = normalizeUpperDefault(request.getStatus(), "ACTIVE");
+        String email = safeTrim(request.getEmail());
+        if (email != null && existsEmailForOtherTechnician(email, null)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician with the same email already exists");
+        }
+
+        LocalDate terminationDate = resolveTerminationDate(technicianType, request.getTerminationDate());
+        String fullName = resolveFullName(null, firstName, lastName);
+
+        jdbcTemplate.update("""
+                INSERT INTO technicians (
+                    technician_id, badge_number, first_name, last_name, full_name,
+                    technician_type, skills, phone_number, email, address, status,
+                    hire_date, work_shift, technician_photo_url, certificate_url,
+                    certificate_issue_date, certificate_expiry_date, termination_date,
+                    certifications, notes, is_deleted
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """,
+                technicianId,
+                badgeNumber,
+                firstName,
+                lastName,
+                fullName,
+                technicianType,
+                request.getSkills(),
+                safeTrim(request.getPhoneNumber()),
+                email,
+                request.getAddress(),
+                status,
+                request.getHireDate(),
+                safeTrim(request.getWorkShift()),
+                safeTrim(request.getTechnicianPhotoUrl()),
+                safeTrim(request.getCertificateUrl()),
+                request.getCertificateIssueDate(),
+                request.getCertificateExpiryDate(),
+                terminationDate,
+                request.getCertifications(),
+                request.getNotes());
+
+        Long technicianPk = queryLong("SELECT CAST(SCOPE_IDENTITY() AS BIGINT)");
+        return getTechnicianById(technicianPk);
+    }
+
+    @Override
+    public TechnicianDetailsResponse getTechnicianById(Long technicianId) {
+        Map<String, Object> row = getTechnicianRowOrThrow(technicianId);
+        return mapTechnician(row);
+    }
+
+    @Override
+    public TechnicianDetailsResponse patchTechnician(Long technicianId, TechnicianPatchRequest request) {
+        Map<String, Object> current = getTechnicianRowOrThrow(technicianId);
+
+        String firstName = request.getFirstName() == null
+                ? asString(current.get("first_name"))
+                : requireNonBlank(request.getFirstName(), "First name cannot be blank");
+        String lastName = request.getLastName() == null
+                ? asString(current.get("last_name"))
+                : requireNonBlank(request.getLastName(), "Last name cannot be blank");
+
+        String badgeNumber = request.getBadgeNumber() == null
+                ? asString(current.get("badge_number"))
+                : requireBadgeUnique(request.getBadgeNumber(), technicianId);
+
+        String resolvedTechnicianId;
+        if (request.getTechnicianId() == null) {
+            resolvedTechnicianId = asString(current.get("technician_id"));
+        } else {
+            String trimmed = requireNonBlank(request.getTechnicianId(), "technicianId cannot be blank");
+            ensureTechnicianIdUnique(trimmed, technicianId);
+            resolvedTechnicianId = trimmed;
+        }
+
+        String technicianType = request.getTechnicianType() == null
+                ? asString(current.get("technician_type"))
+                : normalizeUpperDefault(request.getTechnicianType(), "FULL_TIME");
+        String status = request.getStatus() == null
+                ? asString(current.get("status"))
+                : normalizeUpperDefault(request.getStatus(), "ACTIVE");
+
+        String email;
+        if (request.getEmail() == null) {
+            email = asString(current.get("email"));
+        } else {
+            email = safeTrim(request.getEmail());
+            if (email != null && existsEmailForOtherTechnician(email, technicianId)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician with the same email already exists");
+            }
+        }
+
+        LocalDate terminationDate = resolveTerminationDate(
+                technicianType,
+                request.getTerminationDate() == null ? asLocalDate(current.get("termination_date")) : request.getTerminationDate()
+        );
+
+        jdbcTemplate.update("""
+                UPDATE technicians
+                SET technician_id = ?, badge_number = ?, first_name = ?, last_name = ?, full_name = ?,
+                    technician_type = ?, skills = ?, phone_number = ?, email = ?, address = ?, status = ?,
+                    hire_date = ?, work_shift = ?, technician_photo_url = ?, certificate_url = ?,
+                    certificate_issue_date = ?, certificate_expiry_date = ?, termination_date = ?,
+                    certifications = ?, notes = ?
+                WHERE id = ? AND is_deleted = 0
+                """,
+                resolvedTechnicianId,
+                badgeNumber,
+                firstName,
+                lastName,
+                resolveFullName(null, firstName, lastName),
+                technicianType,
+                request.getSkills() == null ? asString(current.get("skills")) : request.getSkills(),
+                request.getPhoneNumber() == null ? asString(current.get("phone_number")) : safeTrim(request.getPhoneNumber()),
+                email,
+                request.getAddress() == null ? asString(current.get("address")) : request.getAddress(),
+                status,
+                request.getHireDate() == null ? asLocalDate(current.get("hire_date")) : request.getHireDate(),
+                request.getWorkShift() == null ? asString(current.get("work_shift")) : safeTrim(request.getWorkShift()),
+                request.getTechnicianPhotoUrl() == null ? asString(current.get("technician_photo_url")) : safeTrim(request.getTechnicianPhotoUrl()),
+                request.getCertificateUrl() == null ? asString(current.get("certificate_url")) : safeTrim(request.getCertificateUrl()),
+                request.getCertificateIssueDate() == null ? asLocalDate(current.get("certificate_issue_date")) : request.getCertificateIssueDate(),
+                request.getCertificateExpiryDate() == null ? asLocalDate(current.get("certificate_expiry_date")) : request.getCertificateExpiryDate(),
+                terminationDate,
+                request.getCertifications() == null ? asString(current.get("certifications")) : request.getCertifications(),
+                request.getNotes() == null ? asString(current.get("notes")) : request.getNotes(),
+                technicianId);
+
+        return getTechnicianById(technicianId);
+    }
+
+    @Override
+    public void deleteTechnician(Long technicianId) {
+        ensureTechnicianExists(technicianId);
+        long activeAssignments = queryLong("""
+                SELECT COUNT(1)
+                FROM work_orders wo
+                WHERE wo.deleted = 0
+                  AND wo.status IN ('SCHEDULED','IN_PROGRESS')
+                  AND (
+                        wo.assigned_technician_id = ?
+                        OR wo.assigned_team_id IN (
+                            SELECT tm.team_id FROM technician_team_members tm WHERE tm.technician_id = ?
+                        )
+                  )
+                """, technicianId, technicianId);
+        if (activeAssignments > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Cannot delete technician while assigned to active work orders or in future work orders"
+            );
+        }
+        jdbcTemplate.update("DELETE FROM technician_team_members WHERE technician_id = ?", technicianId);
+        jdbcTemplate.update("UPDATE technicians SET is_deleted = 1 WHERE id = ?", technicianId);
+    }
+
+    @Override
     public TechnicianListResponse getTechnicians(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
@@ -128,6 +299,73 @@ public class EamLookupServiceImpl implements EamLookupService {
     public List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days) {
         ensureTechnicianExists(technicianId);
         return buildAvailability(technicianId, days);
+    }
+
+    @Override
+    public TechnicianTeamDetailsResponse createTechnicianTeam(TechnicianTeamCreateRequest request) {
+        String teamName = requireNonBlank(request.getTeamName(), "Team name is required");
+        ensureTeamNameUnique(teamName, null);
+        String status = normalizeUpperDefault(request.getStatus(), "ACTIVE");
+
+        jdbcTemplate.update("""
+                INSERT INTO technician_teams (
+                    team_name, team_description, status, start_date, end_date, notes
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                teamName,
+                request.getTeamDescription(),
+                status,
+                request.getStartDate(),
+                request.getEndDate(),
+                request.getNotes());
+
+        Long teamId = queryLong("SELECT CAST(SCOPE_IDENTITY() AS BIGINT)");
+        applyTeamMembership(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
+        return getTechnicianTeamById(teamId);
+    }
+
+    @Override
+    public TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId) {
+        Map<String, Object> row = getTeamRowOrThrow(teamId);
+        return mapTeam(row);
+    }
+
+    @Override
+    public TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, TechnicianTeamPatchRequest request) {
+        Map<String, Object> current = getTeamRowOrThrow(teamId);
+
+        String teamName = request.getTeamName() == null
+                ? asString(current.get("team_name"))
+                : requireNonBlank(request.getTeamName(), "Team name cannot be blank");
+        if (request.getTeamName() != null) {
+            ensureTeamNameUnique(teamName, teamId);
+        }
+
+        jdbcTemplate.update("""
+                UPDATE technician_teams
+                SET team_name = ?, team_description = ?, status = ?, start_date = ?, end_date = ?, notes = ?
+                WHERE id = ?
+                """,
+                teamName,
+                request.getTeamDescription() == null ? asString(current.get("team_description")) : request.getTeamDescription(),
+                request.getStatus() == null ? asString(current.get("status")) : normalizeUpperDefault(request.getStatus(), "ACTIVE"),
+                request.getStartDate() == null ? asLocalDate(current.get("start_date")) : request.getStartDate(),
+                request.getEndDate() == null ? asLocalDate(current.get("end_date")) : request.getEndDate(),
+                request.getNotes() == null ? asString(current.get("notes")) : request.getNotes(),
+                teamId);
+
+        applyTeamMembership(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
+        return getTechnicianTeamById(teamId);
+    }
+
+    @Override
+    public void deleteTechnicianTeam(Long teamId) {
+        getTeamRowOrThrow(teamId);
+        long membersCount = queryLong("SELECT COUNT(1) FROM technician_team_members WHERE team_id = ?", teamId);
+        if (membersCount > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete team with assigned technicians");
+        }
+        jdbcTemplate.update("DELETE FROM technician_teams WHERE id = ?", teamId);
     }
 
     @Override
@@ -272,6 +510,275 @@ public class EamLookupServiceImpl implements EamLookupService {
             throw new ResourceNotFoundException("Leave not found: " + leaveId);
         }
         return mapLeave(rows.get(0));
+    }
+
+    private Map<String, Object> getTechnicianRowOrThrow(Long technicianId) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                SELECT id, technician_id, badge_number, first_name, last_name, full_name,
+                       technician_type, skills, phone_number, email, address, status,
+                       hire_date, work_shift, technician_photo_url, certificate_url,
+                       certificate_issue_date, certificate_expiry_date, termination_date,
+                       certifications, notes
+                FROM technicians
+                WHERE id = ? AND is_deleted = 0
+                """, technicianId);
+        if (rows.isEmpty()) {
+            throw new ResourceNotFoundException("Technician not found: " + technicianId);
+        }
+        return rows.get(0);
+    }
+
+    private Map<String, Object> getTeamRowOrThrow(Long teamId) {
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+                SELECT id, team_name, team_description, status, start_date, end_date, notes
+                FROM technician_teams
+                WHERE id = ?
+                """, teamId);
+        if (rows.isEmpty()) {
+            throw new ResourceNotFoundException("Technician team not found: " + teamId);
+        }
+        return rows.get(0);
+    }
+
+    private void ensureTeamNameUnique(String teamName, Long currentTeamId) {
+        String sql = currentTeamId == null
+                ? "SELECT COUNT(1) FROM technician_teams WHERE LOWER(team_name) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technician_teams WHERE LOWER(team_name) = LOWER(?) AND id <> ?";
+        long count = currentTeamId == null
+                ? queryLong(sql, teamName)
+                : queryLong(sql, teamName, currentTeamId);
+        if (count > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician team with the same name already exists");
+        }
+    }
+
+    private void applyTeamMembership(Long teamId, List<Long> technicianIds, Long requestedLeaderId) {
+        boolean replaceMembership = technicianIds != null;
+        if (!replaceMembership && requestedLeaderId == null) {
+            return;
+        }
+
+        List<Map<String, Object>> currentMembers = jdbcTemplate.queryForList("""
+                SELECT technician_id, team_leader
+                FROM technician_team_members
+                WHERE team_id = ?
+                """, teamId);
+
+        Set<Long> desiredIds;
+        if (replaceMembership) {
+            if (technicianIds.stream().anyMatch(Objects::isNull)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Technician IDs cannot be null");
+            }
+            desiredIds = new LinkedHashSet<>(technicianIds);
+        } else {
+            desiredIds = currentMembers.stream()
+                    .map(member -> asLong(member.get("technician_id")))
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        }
+
+        if (requestedLeaderId != null && !desiredIds.contains(requestedLeaderId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Team leader must be part of the assigned technicians");
+        }
+
+        if (replaceMembership) {
+            syncTeamTechnicians(teamId, desiredIds, requestedLeaderId, currentMembers);
+        } else {
+            updateLeaderOnly(currentMembers, teamId, requestedLeaderId);
+        }
+    }
+
+    private void syncTeamTechnicians(Long teamId,
+                                     Set<Long> desiredIds,
+                                     Long requestedLeaderId,
+                                     List<Map<String, Object>> currentMembers) {
+        if (desiredIds.isEmpty()) {
+            if (!currentMembers.isEmpty()) {
+                jdbcTemplate.update("DELETE FROM technician_team_members WHERE team_id = ?", teamId);
+            }
+            return;
+        }
+
+        Set<Long> existingTechnicians = fetchExistingTechnicianIds(desiredIds);
+        if (existingTechnicians.size() != desiredIds.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "One or more technicians were not found");
+        }
+
+        Map<Long, Boolean> currentMap = new HashMap<>();
+        for (Map<String, Object> member : currentMembers) {
+            currentMap.put(asLong(member.get("technician_id")), truthy(member.get("team_leader")));
+        }
+
+        Long leaderId = resolveLeaderId(requestedLeaderId, desiredIds, currentMap);
+
+        for (Long currentTechnicianId : currentMap.keySet()) {
+            if (!desiredIds.contains(currentTechnicianId)) {
+                jdbcTemplate.update(
+                        "DELETE FROM technician_team_members WHERE team_id = ? AND technician_id = ?",
+                        teamId,
+                        currentTechnicianId
+                );
+            }
+        }
+
+        for (Long technicianId : desiredIds) {
+            boolean isLeader = leaderId != null && leaderId.equals(technicianId);
+            if (currentMap.containsKey(technicianId)) {
+                jdbcTemplate.update(
+                        "UPDATE technician_team_members SET team_leader = ? WHERE team_id = ? AND technician_id = ?",
+                        isLeader,
+                        teamId,
+                        technicianId
+                );
+            } else {
+                jdbcTemplate.update(
+                        "INSERT INTO technician_team_members (team_id, technician_id, team_leader) VALUES (?, ?, ?)",
+                        teamId,
+                        technicianId,
+                        isLeader
+                );
+            }
+        }
+    }
+
+    private void updateLeaderOnly(List<Map<String, Object>> currentMembers, Long teamId, Long leaderId) {
+        if (leaderId == null) {
+            return;
+        }
+        if (currentMembers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Team has no technicians to assign as leader");
+        }
+        boolean found = currentMembers.stream()
+                .map(member -> asLong(member.get("technician_id")))
+                .anyMatch(leaderId::equals);
+        if (!found) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Team leader must be part of the team");
+        }
+        for (Map<String, Object> member : currentMembers) {
+            Long technicianId = asLong(member.get("technician_id"));
+            jdbcTemplate.update(
+                    "UPDATE technician_team_members SET team_leader = ? WHERE team_id = ? AND technician_id = ?",
+                    leaderId.equals(technicianId),
+                    teamId,
+                    technicianId
+            );
+        }
+    }
+
+    private Long resolveLeaderId(Long requestedLeaderId, Set<Long> desiredIds, Map<Long, Boolean> currentMap) {
+        if (requestedLeaderId != null) {
+            return requestedLeaderId;
+        }
+        for (Map.Entry<Long, Boolean> entry : currentMap.entrySet()) {
+            if (Boolean.TRUE.equals(entry.getValue()) && desiredIds.contains(entry.getKey())) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    private Set<Long> fetchExistingTechnicianIds(Set<Long> technicianIds) {
+        if (technicianIds.isEmpty()) {
+            return Set.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(technicianIds.size(), "?"));
+        String sql = "SELECT id FROM technicians WHERE is_deleted = 0 AND id IN (" + placeholders + ")";
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, technicianIds.toArray());
+        Set<Long> ids = new LinkedHashSet<>();
+        for (Map<String, Object> row : rows) {
+            ids.add(asLong(row.get("id")));
+        }
+        return ids;
+    }
+
+    private boolean existsEmailForOtherTechnician(String email, Long currentTechnicianId) {
+        String sql = currentTechnicianId == null
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(email) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(email) = LOWER(?) AND id <> ?";
+        long count = currentTechnicianId == null
+                ? queryLong(sql, email)
+                : queryLong(sql, email, currentTechnicianId);
+        return count > 0;
+    }
+
+    private String requireBadgeUnique(String badgeNumber, Long currentTechnicianId) {
+        String trimmed = requireNonBlank(badgeNumber, "badgeNumber is required");
+        String sql = currentTechnicianId == null
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(badge_number) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(badge_number) = LOWER(?) AND id <> ?";
+        long count = currentTechnicianId == null
+                ? queryLong(sql, trimmed)
+                : queryLong(sql, trimmed, currentTechnicianId);
+        if (count > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "badgeNumber already exists");
+        }
+        return trimmed;
+    }
+
+    private void ensureTechnicianIdUnique(String technicianId, Long currentTechnicianId) {
+        String sql = currentTechnicianId == null
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?) AND id <> ?";
+        long count = currentTechnicianId == null
+                ? queryLong(sql, technicianId)
+                : queryLong(sql, technicianId, currentTechnicianId);
+        if (count > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "technicianId already exists");
+        }
+    }
+
+    private String determineTechnicianId(String providedTechnicianId, Long currentTechnicianId) {
+        if (providedTechnicianId != null && !providedTechnicianId.isBlank()) {
+            String trimmed = providedTechnicianId.trim();
+            ensureTechnicianIdUnique(trimmed, currentTechnicianId);
+            return trimmed;
+        }
+
+        String date = LocalDate.now().format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        for (int i = 0; i < 30; i++) {
+            int random = java.util.concurrent.ThreadLocalRandom.current().nextInt(0, 10000);
+            String candidate = String.format("TECH-%s-%04d", date, random);
+            long count = queryLong(
+                    "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?)",
+                    candidate
+            );
+            if (count == 0) {
+                return candidate;
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate technicianId");
+    }
+
+    private LocalDate resolveTerminationDate(String technicianType, LocalDate terminationDate) {
+        if ("CONTRACT".equalsIgnoreCase(technicianType)) {
+            return terminationDate;
+        }
+        if (terminationDate != null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "terminationDate allowed only for CONTRACT technicians");
+        }
+        return null;
+    }
+
+    private String requireNonBlank(String value, String message) {
+        if (value == null || value.trim().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+        }
+        return value.trim();
+    }
+
+    private String safeTrim(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String normalizeUpperDefault(String value, String fallback) {
+        String resolved = safeTrim(value);
+        if (resolved == null) {
+            return fallback;
+        }
+        return resolved.toUpperCase();
     }
 
     private TechnicianActivityDto mapActivity(Map<String, Object> row) {

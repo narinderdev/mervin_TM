@@ -1,26 +1,29 @@
-package com.example.tm.team.dto;
+package com.example.tm.eam.dto;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotEmpty;
-import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.time.LocalDate;
+import java.util.List;
+
 @Getter
 @Setter
-public class TmTeamCreateRequest {
+public class TechnicianTeamCreateRequest {
 
     @NotBlank
     private String teamName;
 
     private String teamDescription;
 
-    /**
-     * Optional status; defaults to ACTIVE if null/blank.
-     */
     private String status;
 
-    @NotEmpty
+    private LocalDate startDate;
+
+    private LocalDate endDate;
+
+    private String notes;
+
     private List<Long> technicianIds;
 
     private Long teamLeaderId;
