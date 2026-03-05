@@ -6,15 +6,15 @@ import java.util.List;
 
 public interface TimesheetService {
 
-    TimesheetResponseDto create(TimesheetRequestDto requestDto);
+    TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole);
 
     List<TimesheetResponseDto> getAll();
 
     TimesheetResponseDto getById(Long id);
 
-    TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto);
+    TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto, String actorRole);
 
-    void delete(Long id);
+    void delete(Long id, String actorRole);
 
     TimesheetResponseDto approve(Long id);
 

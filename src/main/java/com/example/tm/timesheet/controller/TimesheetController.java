@@ -1,5 +1,6 @@
 package com.example.tm.timesheet.controller;
 
+import com.example.tm.auth.security.TmJwtService;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.service.TimesheetService;
@@ -14,8 +15,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/timesheets")
@@ -23,10 +26,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class TimesheetController {
 
     private final TimesheetService timesheetService;
+    private final TmJwtService tmJwtService;
 
     @PostMapping
-    public ResponseEntity<TimesheetResponseDto> create(@Valid @RequestBody TimesheetRequestDto requestDto) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(timesheetService.create(requestDto));
+    public ResponseEntity<TimesheetResponseDto> create(
+            @Valid @RequestBody TimesheetRequestDto requestDto,
+            @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+        String actorRole = extractRoleFromAuthorizationHeader(authorizationHeader);
+        return ResponseEntity.status(HttpStatus.CREATED).body(timesheetService.create(requestDto, actorRole));
     }
 
     @GetMapping
@@ -40,8 +47,12 @@ public class TimesheetController {
     }
 
     @PutMapping("/{id}")
-    public TimesheetResponseDto update(@PathVariable Long id, @Valid @RequestBody TimesheetRequestDto requestDto) {
-        return timesheetService.update(id, requestDto);
+    public TimesheetResponseDto update(
+            @PathVariable Long id,
+            @Valid @RequestBody TimesheetRequestDto requestDto,
+            @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+        String actorRole = extractRoleFromAuthorizationHeader(authorizationHeader);
+        return timesheetService.update(id, requestDto, actorRole);
     }
 
     @GetMapping("/technicians/{technicianId}")
@@ -55,8 +66,28 @@ public class TimesheetController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable Long id) {
-        timesheetService.delete(id);
+    public ResponseEntity<Void> delete(
+            @PathVariable Long id,
+            @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+        String actorRole = extractRoleFromAuthorizationHeader(authorizationHeader);
+        timesheetService.delete(id, actorRole);
         return ResponseEntity.noContent().build();
+    }
+
+    private String extractRoleFromAuthorizationHeader(String authorizationHeader) {
+        if (authorizationHeader == null || authorizationHeader.isBlank() || !authorizationHeader.startsWith("Bearer ")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");
+        }
+
+        String token = authorizationHeader.substring(7).trim();
+        if (token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");
+        }
+
+        try {
+            return tmJwtService.extractPrimaryRole(token);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid access token");
+        }
     }
 }

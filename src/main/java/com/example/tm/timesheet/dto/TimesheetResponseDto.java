@@ -16,6 +16,10 @@ public class TimesheetResponseDto {
     private Long id;
     private LocalDate periodStartDate;
     private LocalDate periodEndDate;
+    private LocalDate deadlineDate;
+    private LocalDate lockDate;
+    private String payPeriodStatus;
+    private Boolean adminUnlocked;
     private String viewType;
     private Long technicianId;
     private String technicianFirstName;

@@ -31,6 +31,15 @@ public class Timesheet {
     @Column(name = "period_end_date")
     private LocalDate periodEndDate;
 
+    @Column(name = "deadline_date")
+    private LocalDate deadlineDate;
+
+    @Column(name = "lock_date")
+    private LocalDate lockDate;
+
+    @Column(name = "admin_unlocked")
+    private Boolean adminUnlocked;
+
     @Column(name = "view_type", length = 50)
     private String viewType;
 

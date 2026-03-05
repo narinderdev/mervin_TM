@@ -1,6 +1,8 @@
 package com.example.tm.auth.security;
 
 import com.example.tm.auth.entity.TmUser;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
@@ -42,5 +44,26 @@ public class TmJwtService {
                 .setExpiration(expiry)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
+    }
+
+    public Claims parseClaims(String token) {
+        try {
+            return Jwts.parserBuilder()
+                    .setSigningKey(key)
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Invalid access token", ex);
+        }
+    }
+
+    public String extractPrimaryRole(String token) {
+        Claims claims = parseClaims(token);
+        Object rolesObj = claims.get("roles");
+        if (rolesObj instanceof List<?> roles && !roles.isEmpty() && roles.get(0) != null) {
+            return roles.get(0).toString();
+        }
+        throw new IllegalArgumentException("Role claim not present in token");
     }
 }

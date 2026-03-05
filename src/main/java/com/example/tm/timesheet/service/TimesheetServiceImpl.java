@@ -13,8 +13,11 @@ import com.example.tm.timesheet.entity.Timesheet;
 import com.example.tm.timesheet.entity.TimesheetDay;
 import com.example.tm.timesheet.entity.TimesheetRow;
 import com.example.tm.timesheet.repo.TimesheetRepository;
+import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,12 +31,22 @@ public class TimesheetServiceImpl implements TimesheetService {
     private final TimesheetRepository timesheetRepository;
     private final TmUserRepository tmUserRepository;
 
+    @Value("${timesheet.pay-period-grace-days:2}")
+    private int payPeriodGraceDays;
+
     @Override
-    public TimesheetResponseDto create(TimesheetRequestDto requestDto) {
+    public TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole) {
+        requireActorRole(actorRole);
+        validateMonthlyPeriod(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
+        validateDayDatesWithinPeriod(requestDto);
+        if (isTechnicianRole(actorRole)) {
+            rejectIfLockedByDeadline(computeDeadlineDate(requestDto.getPeriodEndDate()));
+        }
         rejectDuplicatePeriod(requestDto.getTechnicianId(), requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), null);
 
         Timesheet entity = new Timesheet();
         populateEntity(requestDto, entity);
+        applyPayPeriodDates(entity);
         entity.setStatus("PENDING");
 
         return toResponse(timesheetRepository.save(entity));
@@ -55,10 +68,24 @@ public class TimesheetServiceImpl implements TimesheetService {
     }
 
     @Override
-    public TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto) {
+    public TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto, String actorRole) {
+        requireActorRole(actorRole);
         Timesheet existing = findByIdOrThrow(id);
+        if (isTechnicianRole(actorRole)) {
+            rejectIfLockedByDeadline(resolveDeadlineDate(existing));
+        }
+        validateMonthlyPeriod(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
+        validateDayDatesWithinPeriod(requestDto);
+
+        boolean periodChanged = !requestDto.getPeriodStartDate().equals(existing.getPeriodStartDate())
+                || !requestDto.getPeriodEndDate().equals(existing.getPeriodEndDate());
+        if (periodChanged && isTechnicianRole(actorRole)) {
+            rejectIfLockedByDeadline(computeDeadlineDate(requestDto.getPeriodEndDate()));
+        }
+
         rejectDuplicatePeriod(requestDto.getTechnicianId(), requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), id);
         populateEntity(requestDto, existing);
+        applyPayPeriodDates(existing);
 
         return toResponse(timesheetRepository.save(existing));
     }
@@ -80,8 +107,12 @@ public class TimesheetServiceImpl implements TimesheetService {
     }
 
     @Override
-    public void delete(Long id) {
+    public void delete(Long id, String actorRole) {
+        requireActorRole(actorRole);
         Timesheet existing = findByIdOrThrow(id);
+        if (isTechnicianRole(actorRole)) {
+            rejectIfLockedByDeadline(resolveDeadlineDate(existing));
+        }
         timesheetRepository.delete(existing);
     }
 
@@ -137,6 +168,10 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .id(entity.getId())
                 .periodStartDate(entity.getPeriodStartDate())
                 .periodEndDate(entity.getPeriodEndDate())
+                .deadlineDate(resolveDeadlineDate(entity))
+                .lockDate(resolveLockDate(entity))
+                .payPeriodStatus(resolvePayPeriodStatus(entity))
+                .adminUnlocked(Boolean.TRUE.equals(entity.getAdminUnlocked()))
                 .viewType(entity.getViewType())
                 .technicianId(entity.getTechnicianId())
                 .technicianFirstName(technicianFirstName)
@@ -193,7 +228,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    private void rejectDuplicatePeriod(Long technicianId, java.time.LocalDate start, java.time.LocalDate end, Long currentId) {
+    private void rejectDuplicatePeriod(Long technicianId, LocalDate start, LocalDate end, Long currentId) {
         boolean exists = timesheetRepository.existsByTechnicianIdAndPeriodStartDateAndPeriodEndDate(technicianId, start, end);
         if (exists) {
             // If updating, allow the same record
@@ -209,5 +244,87 @@ public class TimesheetServiceImpl implements TimesheetService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Timesheet already exists for period " + start + " to " + end);
         }
+    }
+
+    private void validateMonthlyPeriod(LocalDate periodStartDate, LocalDate periodEndDate) {
+        if (periodStartDate == null || periodEndDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "period_start_date and period_end_date are required");
+        }
+        if (periodStartDate.getDayOfMonth() != 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "period_start_date must be the first day of the month");
+        }
+
+        LocalDate expectedEnd = periodStartDate.with(TemporalAdjusters.lastDayOfMonth());
+        if (!expectedEnd.equals(periodEndDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "period_end_date must be the last day of the same month as period_start_date");
+        }
+    }
+
+    private void validateDayDatesWithinPeriod(TimesheetRequestDto requestDto) {
+        LocalDate start = requestDto.getPeriodStartDate();
+        LocalDate end = requestDto.getPeriodEndDate();
+        if (requestDto.getTimesheetDays() == null || requestDto.getTimesheetDays().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "timesheet_days must contain at least one day");
+        }
+        requestDto.getTimesheetDays().forEach(day -> {
+            LocalDate date = day.getDate();
+            if (date.isBefore(start) || date.isAfter(end)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "timesheet_days date " + date + " is outside pay period " + start + " to " + end);
+            }
+        });
+    }
+
+    private void rejectIfLockedByDeadline(LocalDate deadlineDate) {
+        if (deadlineDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "deadline_date could not be determined");
+        }
+        if (LocalDate.now().isAfter(deadlineDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.LOCKED,
+                    "Pay period is locked after deadline_date " + deadlineDate);
+        }
+    }
+
+    private void applyPayPeriodDates(Timesheet entity) {
+        LocalDate deadlineDate = computeDeadlineDate(entity.getPeriodEndDate());
+        entity.setDeadlineDate(deadlineDate);
+        entity.setLockDate(deadlineDate.plusDays(1));
+        entity.setAdminUnlocked(Boolean.FALSE);
+    }
+
+    private LocalDate computeDeadlineDate(LocalDate periodEndDate) {
+        int graceDays = Math.max(payPeriodGraceDays, 0);
+        return periodEndDate.plusDays(graceDays);
+    }
+
+    private LocalDate resolveDeadlineDate(Timesheet entity) {
+        return entity.getDeadlineDate() != null
+                ? entity.getDeadlineDate()
+                : computeDeadlineDate(entity.getPeriodEndDate());
+    }
+
+    private LocalDate resolveLockDate(Timesheet entity) {
+        return entity.getLockDate() != null
+                ? entity.getLockDate()
+                : resolveDeadlineDate(entity).plusDays(1);
+    }
+
+    private String resolvePayPeriodStatus(Timesheet entity) {
+        return LocalDate.now().isAfter(resolveDeadlineDate(entity)) ? "LOCKED" : "OPEN";
+    }
+
+    private void requireActorRole(String actorRole) {
+        if (actorRole == null || actorRole.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Role claim not present in token");
+        }
+    }
+
+    private boolean isTechnicianRole(String actorRole) {
+        String normalized = actorRole == null ? "" : actorRole.trim().toUpperCase();
+        return normalized.equals("TECHNICIAN") || normalized.contains("TECHNICIAN");
     }
 }
