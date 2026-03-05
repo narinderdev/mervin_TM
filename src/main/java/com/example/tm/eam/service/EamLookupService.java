@@ -47,7 +47,7 @@ public interface EamLookupService {
 
     TechnicianTeamListResponse getTechnicianTeams(int page, int size);
 
-    WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size);
+    WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId);
 
     WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size);
 
@@ -58,8 +58,6 @@ public interface EamLookupService {
     WorkOrderDetailsResponse getWorkOrderById(Long workOrderId);
 
     WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId);
-
-    WorkOrderListResponse getFavouriteWorkOrders(Long technicianId, int page, int size);
 
     TechnicianHolidayListResponse getHolidays(int page, int size);
 

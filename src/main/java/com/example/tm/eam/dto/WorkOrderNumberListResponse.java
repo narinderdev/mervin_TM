@@ -9,6 +9,7 @@ import lombok.Data;
 public class WorkOrderNumberListResponse {
 
     private List<String> workOrderNumbers;
+    private List<String> favouriteWorkOrderNumbers;
     private int page;
     private int size;
     private long totalElements;

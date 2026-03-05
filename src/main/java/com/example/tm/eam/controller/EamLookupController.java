@@ -27,10 +27,14 @@ public class EamLookupController {
     public ResponseEntity<ApiResponse<?>> getWorkOrderNumbers(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "100") int size,
+            @RequestParam(value = "technicianId", required = false) Long technicianId,
             HttpServletRequest request) {
-        log.info("EAM GET /work-orders/numbers page={} size={} cid={}", page, size, correlationId(request));
+        log.info("EAM GET /work-orders/numbers page={} size={} technicianId={} cid={}",
+                page, size, technicianId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
-                HttpStatus.OK.value(), "Work order numbers fetched successfully", eamLookupService.getWorkOrderNumbers(page, size)));
+                HttpStatus.OK.value(),
+                "Work order numbers fetched successfully",
+                eamLookupService.getWorkOrderNumbers(page, size, technicianId)));
     }
 
     @GetMapping("/work-orders/gl-accounts")
@@ -84,20 +88,6 @@ public class EamLookupController {
                 HttpStatus.CREATED.value(),
                 "Work order added to favourites",
                 eamLookupService.addWorkOrderToFavourites(technicianId, workOrderId)));
-    }
-
-    @GetMapping("/work-orders/favourites")
-    public ResponseEntity<ApiResponse<?>> getFavouriteWorkOrders(
-            @RequestParam("technicianId") Long technicianId,
-            @RequestParam(value = "page", defaultValue = "0") int page,
-            @RequestParam(value = "size", defaultValue = "10") int size,
-            HttpServletRequest request) {
-        log.info("EAM GET /work-orders/favourites technicianId={} page={} size={} cid={}",
-                technicianId, page, size, correlationId(request));
-        return ResponseEntity.ok(ApiResponse.successResponse(
-                HttpStatus.OK.value(),
-                "Favourite work orders fetched successfully",
-                eamLookupService.getFavouriteWorkOrders(technicianId, page, size)));
     }
 
     @GetMapping("/holidays")

@@ -391,7 +391,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size) {
+    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -412,10 +412,12 @@ public class EamLookupServiceImpl implements EamLookupService {
                 ORDER BY wo.work_order_number ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, String.class, offset, safeSize);
+        List<String> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId);
 
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
+                .favouriteWorkOrderNumbers(favouriteWorkOrderNumbers)
                 .page(safePage)
                 .size(safeSize)
                 .totalElements(total)
@@ -464,20 +466,36 @@ public class EamLookupServiceImpl implements EamLookupService {
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
 
-        long total = queryLong("""
-                SELECT COUNT(DISTINCT LTRIM(RTRIM(wrt.property_unit)))
+        String propertyUnitColumn = resolveWorkRequestTypePropertyUnitColumn();
+        if (propertyUnitColumn == null) {
+            return WorkRequestTypePropertyUnitListResponse.builder()
+                    .propertyUnits(List.of())
+                    .page(safePage)
+                    .size(safeSize)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+
+        String quotedColumn = "[" + propertyUnitColumn.replace("]", "]]") + "]";
+        String totalSql = """
+                SELECT COUNT(DISTINCT LTRIM(RTRIM(wrt.%s)))
                 FROM work_request_types wrt
-                WHERE wrt.property_unit IS NOT NULL
-                  AND LTRIM(RTRIM(wrt.property_unit)) <> ''
-                """);
-        List<String> propertyUnits = jdbcTemplate.queryForList("""
-                SELECT DISTINCT LTRIM(RTRIM(wrt.property_unit)) AS property_unit
+                WHERE wrt.%s IS NOT NULL
+                  AND LTRIM(RTRIM(wrt.%s)) <> ''
+                """.formatted(quotedColumn, quotedColumn, quotedColumn);
+        String listSql = """
+                SELECT DISTINCT LTRIM(RTRIM(wrt.%s)) AS property_unit
                 FROM work_request_types wrt
-                WHERE wrt.property_unit IS NOT NULL
-                  AND LTRIM(RTRIM(wrt.property_unit)) <> ''
+                WHERE wrt.%s IS NOT NULL
+                  AND LTRIM(RTRIM(wrt.%s)) <> ''
                 ORDER BY property_unit ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, String.class, offset, safeSize);
+                """.formatted(quotedColumn, quotedColumn, quotedColumn);
+
+        long total = queryLong(totalSql);
+        List<String> propertyUnits = jdbcTemplate.queryForList(listSql, String.class, offset, safeSize);
 
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkRequestTypePropertyUnitListResponse.builder()
@@ -488,6 +506,40 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .totalPages(totalPages)
                 .last(safePage >= Math.max(totalPages - 1, 0))
                 .build();
+    }
+
+    private String resolveWorkRequestTypePropertyUnitColumn() {
+        List<String> preferred = List.of(
+                "property_unit",
+                "propertyunit",
+                "unit",
+                "accounting_unit"
+        );
+        for (String candidate : preferred) {
+            if (columnExists("work_request_types", candidate)) {
+                return candidate;
+            }
+        }
+
+        List<String> guessed = jdbcTemplate.queryForList("""
+                SELECT TOP 1 c.COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS c
+                WHERE c.TABLE_NAME = 'work_request_types'
+                  AND (
+                      LOWER(c.COLUMN_NAME) LIKE '%property%unit%'
+                      OR LOWER(c.COLUMN_NAME) LIKE '%unit%'
+                      OR LOWER(c.COLUMN_NAME) LIKE '%property%'
+                  )
+                ORDER BY
+                  CASE
+                      WHEN LOWER(c.COLUMN_NAME) = 'property_unit' THEN 0
+                      WHEN LOWER(c.COLUMN_NAME) LIKE '%property%unit%' THEN 1
+                      WHEN LOWER(c.COLUMN_NAME) LIKE '%unit%' THEN 2
+                      ELSE 3
+                  END,
+                  c.ORDINAL_POSITION
+                """, String.class);
+        return guessed.isEmpty() ? null : guessed.get(0);
     }
 
     @Override
@@ -543,55 +595,52 @@ public class EamLookupServiceImpl implements EamLookupService {
         return workOrder;
     }
 
-    @Override
-    public WorkOrderListResponse getFavouriteWorkOrders(Long technicianId, int page, int size) {
+    private List<String> getFavouriteWorkOrderNumbers(Long technicianId) {
+        if (technicianId == null) {
+            return List.of();
+        }
+
         ensureTechnicianExistsTm(technicianId);
-
-        int safePage = Math.max(page, 0);
-        int safeSize = size <= 0 ? 10 : Math.min(size, 200);
-        int offset = safePage * safeSize;
-
-        long total = queryLongTm("SELECT COUNT(1) FROM work_order_favourites WHERE technician_id = ?", technicianId);
         List<Long> workOrderIds = tmJdbcTemplate.query("""
                         SELECT work_order_id
                         FROM work_order_favourites
                         WHERE technician_id = ?
                         ORDER BY created_at DESC, id DESC
-                        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                         """,
                 (rs, rowNum) -> rs.getLong("work_order_id"),
-                technicianId, offset, safeSize);
+                technicianId);
+        if (workOrderIds.isEmpty()) {
+            return List.of();
+        }
 
-        List<WorkOrderDetailsResponse> workOrders = new ArrayList<>();
-        if (!workOrderIds.isEmpty()) {
-            String placeholders = String.join(",", java.util.Collections.nCopies(workOrderIds.size(), "?"));
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    workOrderSelect() + " WHERE wo.deleted = 0 AND wo.id IN (" + placeholders + ")",
-                    workOrderIds.toArray());
+        String placeholders = String.join(",", java.util.Collections.nCopies(workOrderIds.size(), "?"));
+        String sql = """
+                SELECT wo.id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+                FROM work_orders wo
+                WHERE wo.deleted = 0
+                  AND wo.id IN (%s)
+                  AND wo.work_order_number IS NOT NULL
+                  AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                """.formatted(placeholders);
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, workOrderIds.toArray());
 
-            Map<Long, WorkOrderDetailsResponse> byId = new HashMap<>();
-            for (Map<String, Object> row : rows) {
-                WorkOrderDetailsResponse workOrder = mapWorkOrder(row);
-                byId.put(workOrder.getId(), workOrder);
-            }
-
-            for (Long workOrderId : workOrderIds) {
-                WorkOrderDetailsResponse workOrder = byId.get(workOrderId);
-                if (workOrder != null) {
-                    workOrders.add(workOrder);
-                }
+        Map<Long, String> numberById = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            Long id = asLong(row.get("id"));
+            String number = asString(row.get("work_order_number"));
+            if (id != null && number != null && !number.isBlank()) {
+                numberById.put(id, number);
             }
         }
 
-        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
-        return WorkOrderListResponse.builder()
-                .workOrders(workOrders)
-                .page(safePage)
-                .size(safeSize)
-                .totalElements(total)
-                .totalPages(totalPages)
-                .last(safePage >= Math.max(totalPages - 1, 0))
-                .build();
+        Set<String> orderedUnique = new LinkedHashSet<>();
+        for (Long workOrderId : workOrderIds) {
+            String number = numberById.get(workOrderId);
+            if (number != null && !number.isBlank()) {
+                orderedUnique.add(number);
+            }
+        }
+        return new ArrayList<>(orderedUnique);
     }
 
     @Override
@@ -1608,6 +1657,16 @@ public class EamLookupServiceImpl implements EamLookupService {
     private long queryLong(String sql, Object... args) {
         Number value = jdbcTemplate.queryForObject(sql, Number.class, args);
         return value == null ? 0L : value.longValue();
+    }
+
+    private boolean columnExists(String tableName, String columnName) {
+        long count = queryLong("""
+                SELECT COUNT(1)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = ?
+                  AND LOWER(COLUMN_NAME) = LOWER(?)
+                """, tableName, columnName);
+        return count > 0;
     }
 
     private String formatTimeAgo(LocalDateTime value) {
