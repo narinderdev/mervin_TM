@@ -15,8 +15,10 @@ import com.example.tm.eam.dto.TechnicianTeamPatchRequest;
 import com.example.tm.eam.dto.TechnicianTeamDetailsResponse;
 import com.example.tm.eam.dto.TechnicianTeamListResponse;
 import com.example.tm.eam.dto.WorkOrderDetailsResponse;
+import com.example.tm.eam.dto.WorkOrderGlAccountListResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
 import com.example.tm.eam.dto.WorkOrderNumberListResponse;
+import com.example.tm.eam.dto.WorkRequestTypePropertyUnitListResponse;
 import java.util.List;
 
 public interface EamLookupService {
@@ -46,6 +48,10 @@ public interface EamLookupService {
     TechnicianTeamListResponse getTechnicianTeams(int page, int size);
 
     WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size);
+
+    WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size);
+
+    WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size);
 
     WorkOrderListResponse getWorkOrders(int page, int size);
 

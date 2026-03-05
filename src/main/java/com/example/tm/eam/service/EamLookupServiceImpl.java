@@ -18,8 +18,10 @@ import com.example.tm.eam.dto.TechnicianTeamMembershipResponse;
 import com.example.tm.eam.dto.TechnicianTeamPatchRequest;
 import com.example.tm.eam.dto.TimeWindowDto;
 import com.example.tm.eam.dto.WorkOrderDetailsResponse;
+import com.example.tm.eam.dto.WorkOrderGlAccountListResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
 import com.example.tm.eam.dto.WorkOrderNumberListResponse;
+import com.example.tm.eam.dto.WorkRequestTypePropertyUnitListResponse;
 import com.example.tm.shared.exception.ResourceNotFoundException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -414,6 +416,72 @@ public class EamLookupServiceImpl implements EamLookupService {
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
+    }
+
+    @Override
+    public WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 100 : Math.min(size, 500);
+        int offset = safePage * safeSize;
+
+        long total = queryLong("""
+                SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.gl_account)))
+                FROM work_orders wo
+                WHERE wo.deleted = 0
+                  AND wo.gl_account IS NOT NULL
+                  AND LTRIM(RTRIM(wo.gl_account)) <> ''
+                """);
+        List<String> glAccounts = jdbcTemplate.queryForList("""
+                SELECT DISTINCT LTRIM(RTRIM(wo.gl_account)) AS gl_account
+                FROM work_orders wo
+                WHERE wo.deleted = 0
+                  AND wo.gl_account IS NOT NULL
+                  AND LTRIM(RTRIM(wo.gl_account)) <> ''
+                ORDER BY gl_account ASC
+                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                """, String.class, offset, safeSize);
+
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return WorkOrderGlAccountListResponse.builder()
+                .glAccounts(glAccounts)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
+    }
+
+    @Override
+    public WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 100 : Math.min(size, 500);
+        int offset = safePage * safeSize;
+
+        long total = queryLong("""
+                SELECT COUNT(DISTINCT LTRIM(RTRIM(wrt.property_unit)))
+                FROM work_request_types wrt
+                WHERE wrt.property_unit IS NOT NULL
+                  AND LTRIM(RTRIM(wrt.property_unit)) <> ''
+                """);
+        List<String> propertyUnits = jdbcTemplate.queryForList("""
+                SELECT DISTINCT LTRIM(RTRIM(wrt.property_unit)) AS property_unit
+                FROM work_request_types wrt
+                WHERE wrt.property_unit IS NOT NULL
+                  AND LTRIM(RTRIM(wrt.property_unit)) <> ''
+                ORDER BY property_unit ASC
+                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                """, String.class, offset, safeSize);
+
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return WorkRequestTypePropertyUnitListResponse.builder()
+                .propertyUnits(propertyUnits)
                 .page(safePage)
                 .size(safeSize)
                 .totalElements(total)

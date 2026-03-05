@@ -33,6 +33,28 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Work order numbers fetched successfully", eamLookupService.getWorkOrderNumbers(page, size)));
     }
 
+    @GetMapping("/work-orders/gl-accounts")
+    public ResponseEntity<ApiResponse<?>> getWorkOrderGlAccounts(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "100") int size,
+            HttpServletRequest request) {
+        log.info("EAM GET /work-orders/gl-accounts page={} size={} cid={}", page, size, correlationId(request));
+        return ResponseEntity.ok(ApiResponse.successResponse(
+                HttpStatus.OK.value(), "Work order GL accounts fetched successfully", eamLookupService.getWorkOrderGlAccounts(page, size)));
+    }
+
+    @GetMapping("/work-request-types/property-units")
+    public ResponseEntity<ApiResponse<?>> getWorkRequestTypePropertyUnits(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "100") int size,
+            HttpServletRequest request) {
+        log.info("EAM GET /work-request-types/property-units page={} size={} cid={}", page, size, correlationId(request));
+        return ResponseEntity.ok(ApiResponse.successResponse(
+                HttpStatus.OK.value(),
+                "Work request type property units fetched successfully",
+                eamLookupService.getWorkRequestTypePropertyUnits(page, size)));
+    }
+
     @GetMapping("/work-orders")
     public ResponseEntity<ApiResponse<?>> getWorkOrders(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -52,7 +74,7 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Work order details fetched successfully", eamLookupService.getWorkOrderById(workOrderId)));
     }
 
-    @PostMapping({"/work-orders/{id}/favourites", "/work-orders/{id}/favorites"})
+    @PostMapping("/work-orders/{id}/favourites")
     public ResponseEntity<ApiResponse<?>> addWorkOrderToFavourites(
             @PathVariable("id") Long workOrderId,
             @RequestParam("technicianId") Long technicianId,
@@ -64,7 +86,7 @@ public class EamLookupController {
                 eamLookupService.addWorkOrderToFavourites(technicianId, workOrderId)));
     }
 
-    @GetMapping({"/work-orders/favourites", "/work-orders/favorites"})
+    @GetMapping("/work-orders/favourites")
     public ResponseEntity<ApiResponse<?>> getFavouriteWorkOrders(
             @RequestParam("technicianId") Long technicianId,
             @RequestParam(value = "page", defaultValue = "0") int page,
