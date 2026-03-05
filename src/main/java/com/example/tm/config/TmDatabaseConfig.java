@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.core.env.Environment;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -75,5 +76,10 @@ public class TmDatabaseConfig {
     public PlatformTransactionManager tmTransactionManager(
             @Qualifier("tmEntityManagerFactory") EntityManagerFactory tmEntityManagerFactory) {
         return new JpaTransactionManager(tmEntityManagerFactory);
+    }
+
+    @Bean(name = "tmJdbcTemplate")
+    public JdbcTemplate tmJdbcTemplate(@Qualifier("tmDataSource") DataSource tmDataSource) {
+        return new JdbcTemplate(tmDataSource);
     }
 }

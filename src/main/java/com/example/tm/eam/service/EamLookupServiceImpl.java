@@ -19,6 +19,7 @@ import com.example.tm.eam.dto.TechnicianTeamPatchRequest;
 import com.example.tm.eam.dto.TimeWindowDto;
 import com.example.tm.eam.dto.WorkOrderDetailsResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
+import com.example.tm.eam.dto.WorkOrderNumberListResponse;
 import com.example.tm.shared.exception.ResourceNotFoundException;
 import java.sql.Timestamp;
 import java.time.LocalDate;
@@ -33,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -41,11 +41,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
-@RequiredArgsConstructor
 public class EamLookupServiceImpl implements EamLookupService {
 
-    @Qualifier("eamJdbcTemplate")
     private final JdbcTemplate jdbcTemplate;
+    private final JdbcTemplate tmJdbcTemplate;
+
+    public EamLookupServiceImpl(
+            @Qualifier("eamJdbcTemplate") JdbcTemplate jdbcTemplate,
+            @Qualifier("tmJdbcTemplate") JdbcTemplate tmJdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.tmJdbcTemplate = tmJdbcTemplate;
+    }
 
     @Override
     public TechnicianDashboardResponse getDashboardTechnicians(Integer limit) {
@@ -107,19 +113,19 @@ public class EamLookupServiceImpl implements EamLookupService {
     public TechnicianDetailsResponse createTechnician(TechnicianCreateRequest request) {
         String firstName = requireNonBlank(request.getFirstName(), "First name is required");
         String lastName = requireNonBlank(request.getLastName(), "Last name is required");
-        String badgeNumber = requireBadgeUnique(request.getBadgeNumber(), null);
-        String technicianId = determineTechnicianId(request.getTechnicianId(), null);
+        String badgeNumber = requireBadgeUniqueTm(request.getBadgeNumber(), null);
+        String technicianId = determineTechnicianIdTm(request.getTechnicianId(), null);
         String technicianType = normalizeUpperDefault(request.getTechnicianType(), "FULL_TIME");
         String status = normalizeUpperDefault(request.getStatus(), "ACTIVE");
         String email = safeTrim(request.getEmail());
-        if (email != null && existsEmailForOtherTechnician(email, null)) {
+        if (email != null && existsEmailForOtherTechnicianTm(email, null)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician with the same email already exists");
         }
 
         LocalDate terminationDate = resolveTerminationDate(technicianType, request.getTerminationDate());
         String fullName = resolveFullName(null, firstName, lastName);
 
-        jdbcTemplate.update("""
+        Long technicianPk = tmJdbcTemplate.queryForObject("""
                 INSERT INTO technicians (
                     technician_id, badge_number, first_name, last_name, full_name,
                     technician_type, skills, phone_number, email, address, status,
@@ -127,8 +133,10 @@ public class EamLookupServiceImpl implements EamLookupService {
                     certificate_issue_date, certificate_expiry_date, termination_date,
                     certifications, notes, is_deleted
                 )
+                OUTPUT INSERTED.id
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """,
+                Long.class,
                 technicianId,
                 badgeNumber,
                 firstName,
@@ -149,20 +157,21 @@ public class EamLookupServiceImpl implements EamLookupService {
                 terminationDate,
                 request.getCertifications(),
                 request.getNotes());
-
-        Long technicianPk = queryLong("SELECT CAST(SCOPE_IDENTITY() AS BIGINT)");
+        if (technicianPk == null || technicianPk <= 0) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create technician");
+        }
         return getTechnicianById(technicianPk);
     }
 
     @Override
     public TechnicianDetailsResponse getTechnicianById(Long technicianId) {
-        Map<String, Object> row = getTechnicianRowOrThrow(technicianId);
-        return mapTechnician(row);
+        Map<String, Object> row = getTechnicianRowOrThrowTm(technicianId);
+        return mapTechnicianTm(row);
     }
 
     @Override
     public TechnicianDetailsResponse patchTechnician(Long technicianId, TechnicianPatchRequest request) {
-        Map<String, Object> current = getTechnicianRowOrThrow(technicianId);
+        Map<String, Object> current = getTechnicianRowOrThrowTm(technicianId);
 
         String firstName = request.getFirstName() == null
                 ? asString(current.get("first_name"))
@@ -173,14 +182,14 @@ public class EamLookupServiceImpl implements EamLookupService {
 
         String badgeNumber = request.getBadgeNumber() == null
                 ? asString(current.get("badge_number"))
-                : requireBadgeUnique(request.getBadgeNumber(), technicianId);
+                : requireBadgeUniqueTm(request.getBadgeNumber(), technicianId);
 
         String resolvedTechnicianId;
         if (request.getTechnicianId() == null) {
             resolvedTechnicianId = asString(current.get("technician_id"));
         } else {
             String trimmed = requireNonBlank(request.getTechnicianId(), "technicianId cannot be blank");
-            ensureTechnicianIdUnique(trimmed, technicianId);
+            ensureTechnicianIdUniqueTm(trimmed, technicianId);
             resolvedTechnicianId = trimmed;
         }
 
@@ -196,7 +205,7 @@ public class EamLookupServiceImpl implements EamLookupService {
             email = asString(current.get("email"));
         } else {
             email = safeTrim(request.getEmail());
-            if (email != null && existsEmailForOtherTechnician(email, technicianId)) {
+            if (email != null && existsEmailForOtherTechnicianTm(email, technicianId)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician with the same email already exists");
             }
         }
@@ -206,7 +215,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 request.getTerminationDate() == null ? asLocalDate(current.get("termination_date")) : request.getTerminationDate()
         );
 
-        jdbcTemplate.update("""
+        tmJdbcTemplate.update("""
                 UPDATE technicians
                 SET technician_id = ?, badge_number = ?, first_name = ?, last_name = ?, full_name = ?,
                     technician_type = ?, skills = ?, phone_number = ?, email = ?, address = ?, status = ?,
@@ -242,27 +251,9 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     @Override
     public void deleteTechnician(Long technicianId) {
-        ensureTechnicianExists(technicianId);
-        long activeAssignments = queryLong("""
-                SELECT COUNT(1)
-                FROM work_orders wo
-                WHERE wo.deleted = 0
-                  AND wo.status IN ('SCHEDULED','IN_PROGRESS')
-                  AND (
-                        wo.assigned_technician_id = ?
-                        OR wo.assigned_team_id IN (
-                            SELECT tm.team_id FROM technician_team_members tm WHERE tm.technician_id = ?
-                        )
-                  )
-                """, technicianId, technicianId);
-        if (activeAssignments > 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Cannot delete technician while assigned to active work orders or in future work orders"
-            );
-        }
-        jdbcTemplate.update("DELETE FROM technician_team_members WHERE technician_id = ?", technicianId);
-        jdbcTemplate.update("UPDATE technicians SET is_deleted = 1 WHERE id = ?", technicianId);
+        ensureTechnicianExistsTm(technicianId);
+        tmJdbcTemplate.update("DELETE FROM technician_team_members WHERE technician_id = ?", technicianId);
+        tmJdbcTemplate.update("UPDATE technicians SET is_deleted = 1 WHERE id = ?", technicianId);
     }
 
     @Override
@@ -271,8 +262,8 @@ public class EamLookupServiceImpl implements EamLookupService {
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
 
-        long total = queryLong("SELECT COUNT(1) FROM technicians WHERE is_deleted = 0");
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+        long total = queryLongTm("SELECT COUNT(1) FROM technicians WHERE is_deleted = 0");
+        List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
                 SELECT id, technician_id, badge_number, first_name, last_name, full_name,
                        technician_type, skills, phone_number, email, address, status,
                        hire_date, work_shift, technician_photo_url, certificate_url,
@@ -284,7 +275,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, offset, safeSize);
 
-        List<TechnicianDetailsResponse> technicians = rows.stream().map(this::mapTechnician).toList();
+        List<TechnicianDetailsResponse> technicians = rows.stream().map(this::mapTechnicianTm).toList();
         return TechnicianListResponse.builder()
                 .technicians(technicians)
                 .page(safePage)
@@ -304,44 +295,48 @@ public class EamLookupServiceImpl implements EamLookupService {
     @Override
     public TechnicianTeamDetailsResponse createTechnicianTeam(TechnicianTeamCreateRequest request) {
         String teamName = requireNonBlank(request.getTeamName(), "Team name is required");
-        ensureTeamNameUnique(teamName, null);
+        ensureTeamNameUniqueTm(teamName, null);
         String status = normalizeUpperDefault(request.getStatus(), "ACTIVE");
 
-        jdbcTemplate.update("""
+        Long teamId = tmJdbcTemplate.queryForObject("""
                 INSERT INTO technician_teams (
                     team_name, team_description, status, start_date, end_date, notes
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                )
+                OUTPUT INSERTED.id
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
+                Long.class,
                 teamName,
                 request.getTeamDescription(),
                 status,
                 request.getStartDate(),
                 request.getEndDate(),
                 request.getNotes());
-
-        Long teamId = queryLong("SELECT CAST(SCOPE_IDENTITY() AS BIGINT)");
-        applyTeamMembership(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
+        if (teamId == null || teamId <= 0) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create technician team");
+        }
+        applyTeamMembershipTm(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
         return getTechnicianTeamById(teamId);
     }
 
     @Override
     public TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId) {
-        Map<String, Object> row = getTeamRowOrThrow(teamId);
-        return mapTeam(row);
+        Map<String, Object> row = getTeamRowOrThrowTm(teamId);
+        return mapTeamTm(row);
     }
 
     @Override
     public TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, TechnicianTeamPatchRequest request) {
-        Map<String, Object> current = getTeamRowOrThrow(teamId);
+        Map<String, Object> current = getTeamRowOrThrowTm(teamId);
 
         String teamName = request.getTeamName() == null
                 ? asString(current.get("team_name"))
                 : requireNonBlank(request.getTeamName(), "Team name cannot be blank");
         if (request.getTeamName() != null) {
-            ensureTeamNameUnique(teamName, teamId);
+            ensureTeamNameUniqueTm(teamName, teamId);
         }
 
-        jdbcTemplate.update("""
+        tmJdbcTemplate.update("""
                 UPDATE technician_teams
                 SET team_name = ?, team_description = ?, status = ?, start_date = ?, end_date = ?, notes = ?
                 WHERE id = ?
@@ -354,18 +349,18 @@ public class EamLookupServiceImpl implements EamLookupService {
                 request.getNotes() == null ? asString(current.get("notes")) : request.getNotes(),
                 teamId);
 
-        applyTeamMembership(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
+        applyTeamMembershipTm(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
         return getTechnicianTeamById(teamId);
     }
 
     @Override
     public void deleteTechnicianTeam(Long teamId) {
-        getTeamRowOrThrow(teamId);
-        long membersCount = queryLong("SELECT COUNT(1) FROM technician_team_members WHERE team_id = ?", teamId);
+        getTeamRowOrThrowTm(teamId);
+        long membersCount = queryLongTm("SELECT COUNT(1) FROM technician_team_members WHERE team_id = ?", teamId);
         if (membersCount > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete team with assigned technicians");
         }
-        jdbcTemplate.update("DELETE FROM technician_teams WHERE id = ?", teamId);
+        tmJdbcTemplate.update("DELETE FROM technician_teams WHERE id = ?", teamId);
     }
 
     @Override
@@ -374,17 +369,51 @@ public class EamLookupServiceImpl implements EamLookupService {
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
 
-        long total = queryLong("SELECT COUNT(1) FROM technician_teams");
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
+        long total = queryLongTm("SELECT COUNT(1) FROM technician_teams");
+        List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
                 SELECT id, team_name, team_description, status, start_date, end_date, notes
                 FROM technician_teams
                 ORDER BY id
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, offset, safeSize);
-        List<TechnicianTeamDetailsResponse> teams = rows.stream().map(this::mapTeam).toList();
+        List<TechnicianTeamDetailsResponse> teams = rows.stream().map(this::mapTeamTm).toList();
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return TechnicianTeamListResponse.builder()
                 .teams(teams)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
+    }
+
+    @Override
+    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 100 : Math.min(size, 500);
+        int offset = safePage * safeSize;
+
+        long total = queryLong("""
+                SELECT COUNT(DISTINCT wo.work_order_number)
+                FROM work_orders wo
+                WHERE wo.deleted = 0
+                  AND wo.work_order_number IS NOT NULL
+                  AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                """);
+        List<String> workOrderNumbers = jdbcTemplate.queryForList("""
+                SELECT DISTINCT wo.work_order_number
+                FROM work_orders wo
+                WHERE wo.deleted = 0
+                  AND wo.work_order_number IS NOT NULL
+                  AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                ORDER BY wo.work_order_number ASC
+                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                """, String.class, offset, safeSize);
+
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return WorkOrderNumberListResponse.builder()
+                .workOrderNumbers(workOrderNumbers)
                 .page(safePage)
                 .size(safeSize)
                 .totalElements(total)
@@ -424,6 +453,77 @@ public class EamLookupServiceImpl implements EamLookupService {
             throw new ResourceNotFoundException("Work order not found: " + workOrderId);
         }
         return mapWorkOrder(rows.get(0));
+    }
+
+    @Override
+    public WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId) {
+        ensureTechnicianExistsTm(technicianId);
+        WorkOrderDetailsResponse workOrder = getWorkOrderById(workOrderId);
+
+        tmJdbcTemplate.update("""
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM work_order_favourites
+                    WHERE technician_id = ? AND work_order_id = ?
+                )
+                BEGIN
+                    INSERT INTO work_order_favourites (technician_id, work_order_id)
+                    VALUES (?, ?)
+                END
+                """, technicianId, workOrderId, technicianId, workOrderId);
+
+        return workOrder;
+    }
+
+    @Override
+    public WorkOrderListResponse getFavouriteWorkOrders(Long technicianId, int page, int size) {
+        ensureTechnicianExistsTm(technicianId);
+
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 10 : Math.min(size, 200);
+        int offset = safePage * safeSize;
+
+        long total = queryLongTm("SELECT COUNT(1) FROM work_order_favourites WHERE technician_id = ?", technicianId);
+        List<Long> workOrderIds = tmJdbcTemplate.query("""
+                        SELECT work_order_id
+                        FROM work_order_favourites
+                        WHERE technician_id = ?
+                        ORDER BY created_at DESC, id DESC
+                        OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                        """,
+                (rs, rowNum) -> rs.getLong("work_order_id"),
+                technicianId, offset, safeSize);
+
+        List<WorkOrderDetailsResponse> workOrders = new ArrayList<>();
+        if (!workOrderIds.isEmpty()) {
+            String placeholders = String.join(",", java.util.Collections.nCopies(workOrderIds.size(), "?"));
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    workOrderSelect() + " WHERE wo.deleted = 0 AND wo.id IN (" + placeholders + ")",
+                    workOrderIds.toArray());
+
+            Map<Long, WorkOrderDetailsResponse> byId = new HashMap<>();
+            for (Map<String, Object> row : rows) {
+                WorkOrderDetailsResponse workOrder = mapWorkOrder(row);
+                byId.put(workOrder.getId(), workOrder);
+            }
+
+            for (Long workOrderId : workOrderIds) {
+                WorkOrderDetailsResponse workOrder = byId.get(workOrderId);
+                if (workOrder != null) {
+                    workOrders.add(workOrder);
+                }
+            }
+        }
+
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return WorkOrderListResponse.builder()
+                .workOrders(workOrders)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
     }
 
     @Override
@@ -748,6 +848,242 @@ public class EamLookupServiceImpl implements EamLookupService {
         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate technicianId");
     }
 
+    private Map<String, Object> getTechnicianRowOrThrowTm(Long technicianId) {
+        List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
+                SELECT id, technician_id, badge_number, first_name, last_name, full_name,
+                       technician_type, skills, phone_number, email, address, status,
+                       hire_date, work_shift, technician_photo_url, certificate_url,
+                       certificate_issue_date, certificate_expiry_date, termination_date,
+                       certifications, notes
+                FROM technicians
+                WHERE id = ? AND is_deleted = 0
+                """, technicianId);
+        if (rows.isEmpty()) {
+            throw new ResourceNotFoundException("Technician not found: " + technicianId);
+        }
+        return rows.get(0);
+    }
+
+    private Map<String, Object> getTeamRowOrThrowTm(Long teamId) {
+        List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
+                SELECT id, team_name, team_description, status, start_date, end_date, notes
+                FROM technician_teams
+                WHERE id = ?
+                """, teamId);
+        if (rows.isEmpty()) {
+            throw new ResourceNotFoundException("Technician team not found: " + teamId);
+        }
+        return rows.get(0);
+    }
+
+    private void ensureTeamNameUniqueTm(String teamName, Long currentTeamId) {
+        String sql = currentTeamId == null
+                ? "SELECT COUNT(1) FROM technician_teams WHERE LOWER(team_name) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technician_teams WHERE LOWER(team_name) = LOWER(?) AND id <> ?";
+        long count = currentTeamId == null
+                ? queryLongTm(sql, teamName)
+                : queryLongTm(sql, teamName, currentTeamId);
+        if (count > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician team with the same name already exists");
+        }
+    }
+
+    private void applyTeamMembershipTm(Long teamId, List<Long> technicianIds, Long requestedLeaderId) {
+        boolean replaceMembership = technicianIds != null;
+        if (!replaceMembership && requestedLeaderId == null) {
+            return;
+        }
+
+        List<Map<String, Object>> currentMembers = tmJdbcTemplate.queryForList("""
+                SELECT technician_id, team_leader
+                FROM technician_team_members
+                WHERE team_id = ?
+                """, teamId);
+
+        Set<Long> desiredIds;
+        if (replaceMembership) {
+            if (technicianIds.stream().anyMatch(Objects::isNull)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Technician IDs cannot be null");
+            }
+            desiredIds = new LinkedHashSet<>(technicianIds);
+        } else {
+            desiredIds = currentMembers.stream()
+                    .map(member -> asLong(member.get("technician_id")))
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        }
+
+        if (requestedLeaderId != null && !desiredIds.contains(requestedLeaderId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Team leader must be part of the assigned technicians");
+        }
+
+        if (replaceMembership) {
+            syncTeamTechniciansTm(teamId, desiredIds, requestedLeaderId, currentMembers);
+        } else {
+            updateLeaderOnlyTm(currentMembers, teamId, requestedLeaderId);
+        }
+    }
+
+    private void syncTeamTechniciansTm(Long teamId,
+                                       Set<Long> desiredIds,
+                                       Long requestedLeaderId,
+                                       List<Map<String, Object>> currentMembers) {
+        if (desiredIds.isEmpty()) {
+            if (!currentMembers.isEmpty()) {
+                tmJdbcTemplate.update("DELETE FROM technician_team_members WHERE team_id = ?", teamId);
+            }
+            return;
+        }
+
+        Set<Long> existingTechnicians = fetchExistingTechnicianIdsTm(desiredIds);
+        if (existingTechnicians.size() != desiredIds.size()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "One or more technicians were not found");
+        }
+
+        Map<Long, Boolean> currentMap = new HashMap<>();
+        for (Map<String, Object> member : currentMembers) {
+            currentMap.put(asLong(member.get("technician_id")), truthy(member.get("team_leader")));
+        }
+
+        Long leaderId = resolveLeaderId(requestedLeaderId, desiredIds, currentMap);
+
+        for (Long currentTechnicianId : currentMap.keySet()) {
+            if (!desiredIds.contains(currentTechnicianId)) {
+                tmJdbcTemplate.update(
+                        "DELETE FROM technician_team_members WHERE team_id = ? AND technician_id = ?",
+                        teamId,
+                        currentTechnicianId
+                );
+            }
+        }
+
+        for (Long technicianId : desiredIds) {
+            boolean isLeader = leaderId != null && leaderId.equals(technicianId);
+            if (currentMap.containsKey(technicianId)) {
+                tmJdbcTemplate.update(
+                        "UPDATE technician_team_members SET team_leader = ? WHERE team_id = ? AND technician_id = ?",
+                        isLeader,
+                        teamId,
+                        technicianId
+                );
+            } else {
+                tmJdbcTemplate.update(
+                        "INSERT INTO technician_team_members (team_id, technician_id, team_leader) VALUES (?, ?, ?)",
+                        teamId,
+                        technicianId,
+                        isLeader
+                );
+            }
+        }
+    }
+
+    private void updateLeaderOnlyTm(List<Map<String, Object>> currentMembers, Long teamId, Long leaderId) {
+        if (leaderId == null) {
+            return;
+        }
+        if (currentMembers.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Team has no technicians to assign as leader");
+        }
+        boolean found = currentMembers.stream()
+                .map(member -> asLong(member.get("technician_id")))
+                .anyMatch(leaderId::equals);
+        if (!found) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Team leader must be part of the team");
+        }
+        for (Map<String, Object> member : currentMembers) {
+            Long technicianId = asLong(member.get("technician_id"));
+            tmJdbcTemplate.update(
+                    "UPDATE technician_team_members SET team_leader = ? WHERE team_id = ? AND technician_id = ?",
+                    leaderId.equals(technicianId),
+                    teamId,
+                    technicianId
+            );
+        }
+    }
+
+    private Set<Long> fetchExistingTechnicianIdsTm(Set<Long> technicianIds) {
+        if (technicianIds.isEmpty()) {
+            return Set.of();
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(technicianIds.size(), "?"));
+        String sql = "SELECT id FROM technicians WHERE is_deleted = 0 AND id IN (" + placeholders + ")";
+        List<Map<String, Object>> rows = tmJdbcTemplate.queryForList(sql, technicianIds.toArray());
+        Set<Long> ids = new LinkedHashSet<>();
+        for (Map<String, Object> row : rows) {
+            ids.add(asLong(row.get("id")));
+        }
+        return ids;
+    }
+
+    private boolean existsEmailForOtherTechnicianTm(String email, Long currentTechnicianId) {
+        String sql = currentTechnicianId == null
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(email) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(email) = LOWER(?) AND id <> ?";
+        long count = currentTechnicianId == null
+                ? queryLongTm(sql, email)
+                : queryLongTm(sql, email, currentTechnicianId);
+        return count > 0;
+    }
+
+    private String requireBadgeUniqueTm(String badgeNumber, Long currentTechnicianId) {
+        String trimmed = requireNonBlank(badgeNumber, "badgeNumber is required");
+        String sql = currentTechnicianId == null
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(badge_number) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(badge_number) = LOWER(?) AND id <> ?";
+        long count = currentTechnicianId == null
+                ? queryLongTm(sql, trimmed)
+                : queryLongTm(sql, trimmed, currentTechnicianId);
+        if (count > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "badgeNumber already exists");
+        }
+        return trimmed;
+    }
+
+    private void ensureTechnicianIdUniqueTm(String technicianId, Long currentTechnicianId) {
+        String sql = currentTechnicianId == null
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?) AND id <> ?";
+        long count = currentTechnicianId == null
+                ? queryLongTm(sql, technicianId)
+                : queryLongTm(sql, technicianId, currentTechnicianId);
+        if (count > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "technicianId already exists");
+        }
+    }
+
+    private String determineTechnicianIdTm(String providedTechnicianId, Long currentTechnicianId) {
+        if (providedTechnicianId != null && !providedTechnicianId.isBlank()) {
+            String trimmed = providedTechnicianId.trim();
+            ensureTechnicianIdUniqueTm(trimmed, currentTechnicianId);
+            return trimmed;
+        }
+
+        String date = LocalDate.now().format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+        for (int i = 0; i < 30; i++) {
+            int random = java.util.concurrent.ThreadLocalRandom.current().nextInt(0, 10000);
+            String candidate = String.format("TECH-%s-%04d", date, random);
+            long count = queryLongTm(
+                    "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?)",
+                    candidate
+            );
+            if (count == 0) {
+                return candidate;
+            }
+        }
+        throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate technicianId");
+    }
+
+    private void ensureTechnicianExistsTm(Long technicianId) {
+        long count = queryLongTm("SELECT COUNT(1) FROM technicians WHERE id = ? AND is_deleted = 0", technicianId);
+        if (count == 0) {
+            throw new ResourceNotFoundException("Technician not found: " + technicianId);
+        }
+    }
+
+    private long queryLongTm(String sql, Object... args) {
+        Number value = tmJdbcTemplate.queryForObject(sql, Number.class, args);
+        return value == null ? 0L : value.longValue();
+    }
+
     private LocalDate resolveTerminationDate(String technicianType, LocalDate terminationDate) {
         if ("CONTRACT".equalsIgnoreCase(technicianType)) {
             return terminationDate;
@@ -832,6 +1168,101 @@ public class EamLookupServiceImpl implements EamLookupService {
                 FROM technician_leaves l
                 JOIN technicians t ON t.id = l.technician_id
                 """;
+    }
+
+    private TechnicianDetailsResponse mapTechnicianTm(Map<String, Object> row) {
+        Long technicianId = asLong(row.get("id"));
+        List<TechnicianTeamMembershipResponse> memberships = tmJdbcTemplate.queryForList("""
+                SELECT m.team_id, tt.team_name, m.team_leader
+                FROM technician_team_members m
+                JOIN technician_teams tt ON tt.id = m.team_id
+                WHERE m.technician_id = ?
+                """, technicianId).stream().map(member -> {
+            Long teamId = asLong(member.get("team_id"));
+            List<String> leaderNames = tmJdbcTemplate.query("""
+                            SELECT COALESCE(NULLIF(LTRIM(RTRIM(t.full_name)), ''),
+                                            LTRIM(RTRIM(COALESCE(t.first_name, '') + ' ' + COALESCE(t.last_name, ''))))
+                            FROM technician_team_members tm
+                            JOIN technicians t ON t.id = tm.technician_id
+                            WHERE tm.team_id = ? AND tm.team_leader = 1
+                            """,
+                    (rs, rowNum) -> rs.getString(1),
+                    teamId);
+            return TechnicianTeamMembershipResponse.builder()
+                    .teamId(teamId)
+                    .teamName(asString(member.get("team_name")))
+                    .teamLeader(truthy(member.get("team_leader")))
+                    .teamLeaderNames(leaderNames)
+                    .build();
+        }).toList();
+
+        return TechnicianDetailsResponse.builder()
+                .id(technicianId)
+                .technicianId(asString(row.get("technician_id")))
+                .badgeNumber(asString(row.get("badge_number")))
+                .firstName(asString(row.get("first_name")))
+                .lastName(asString(row.get("last_name")))
+                .fullName(resolveFullName(asString(row.get("full_name")), asString(row.get("first_name")), asString(row.get("last_name"))))
+                .technicianType(asString(row.get("technician_type")))
+                .skills(asString(row.get("skills")))
+                .phoneNumber(asString(row.get("phone_number")))
+                .email(asString(row.get("email")))
+                .address(asString(row.get("address")))
+                .status(asString(row.get("status")))
+                .workStatus("AVAILABLE")
+                .hireDate(asLocalDate(row.get("hire_date")))
+                .workShift(asString(row.get("work_shift")))
+                .technicianPhotoUrl(asString(row.get("technician_photo_url")))
+                .certificateUrl(asString(row.get("certificate_url")))
+                .certificateIssueDate(asLocalDate(row.get("certificate_issue_date")))
+                .certificateExpiryDate(asLocalDate(row.get("certificate_expiry_date")))
+                .terminationDate(asLocalDate(row.get("termination_date")))
+                .certifications(asString(row.get("certifications")))
+                .notes(asString(row.get("notes")))
+                .teamLeader(memberships.stream().anyMatch(TechnicianTeamMembershipResponse::isTeamLeader))
+                .teamMemberships(memberships)
+                .build();
+    }
+
+    private TechnicianTeamDetailsResponse mapTeamTm(Map<String, Object> row) {
+        Long teamId = asLong(row.get("id"));
+        List<Map<String, Object>> technicianRows = tmJdbcTemplate.queryForList("""
+                SELECT t.id, t.technician_id, t.badge_number, t.first_name, t.last_name, t.full_name,
+                       t.technician_type, t.skills, t.phone_number, t.email, t.address, t.status,
+                       t.hire_date, t.work_shift, t.technician_photo_url, t.certificate_url,
+                       t.certificate_issue_date, t.certificate_expiry_date, t.termination_date,
+                       t.certifications, t.notes
+                FROM technician_team_members m
+                JOIN technicians t ON t.id = m.technician_id
+                WHERE m.team_id = ? AND t.is_deleted = 0
+                ORDER BY t.id
+                """, teamId);
+        List<TechnicianDetailsResponse> technicians = technicianRows.stream().map(this::mapTechnicianTm).toList();
+
+        List<Map<String, Object>> leaderRows = tmJdbcTemplate.queryForList("""
+                SELECT TOP 1 t.id AS leader_id,
+                       COALESCE(NULLIF(LTRIM(RTRIM(t.full_name)), ''),
+                                LTRIM(RTRIM(COALESCE(t.first_name, '') + ' ' + COALESCE(t.last_name, '')))) AS leader_name
+                FROM technician_team_members m
+                JOIN technicians t ON t.id = m.technician_id
+                WHERE m.team_id = ? AND m.team_leader = 1
+                """, teamId);
+        Long teamLeaderId = leaderRows.isEmpty() ? null : asLong(leaderRows.get(0).get("leader_id"));
+        String teamLeaderName = leaderRows.isEmpty() ? null : asString(leaderRows.get(0).get("leader_name"));
+
+        return TechnicianTeamDetailsResponse.builder()
+                .id(teamId)
+                .teamName(asString(row.get("team_name")))
+                .teamDescription(asString(row.get("team_description")))
+                .status(asString(row.get("status")))
+                .startDate(asLocalDate(row.get("start_date")))
+                .endDate(asLocalDate(row.get("end_date")))
+                .notes(asString(row.get("notes")))
+                .teamLeaderId(teamLeaderId)
+                .teamLeaderName(teamLeaderName)
+                .availability("Available")
+                .technicians(technicians)
+                .build();
     }
 
     private TechnicianDetailsResponse mapTechnician(Map<String, Object> row) {

@@ -12,7 +12,6 @@ import lombok.Getter;
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
 public class TimesheetDayResponseDto {
-
     private LocalDate date;
     private String dayOfWeek;
     private BigDecimal dailyTotal;

@@ -16,6 +16,7 @@ import com.example.tm.eam.dto.TechnicianTeamDetailsResponse;
 import com.example.tm.eam.dto.TechnicianTeamListResponse;
 import com.example.tm.eam.dto.WorkOrderDetailsResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
+import com.example.tm.eam.dto.WorkOrderNumberListResponse;
 import java.util.List;
 
 public interface EamLookupService {
@@ -44,9 +45,15 @@ public interface EamLookupService {
 
     TechnicianTeamListResponse getTechnicianTeams(int page, int size);
 
+    WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size);
+
     WorkOrderListResponse getWorkOrders(int page, int size);
 
     WorkOrderDetailsResponse getWorkOrderById(Long workOrderId);
+
+    WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId);
+
+    WorkOrderListResponse getFavouriteWorkOrders(Long technicianId, int page, int size);
 
     TechnicianHolidayListResponse getHolidays(int page, int size);
 
