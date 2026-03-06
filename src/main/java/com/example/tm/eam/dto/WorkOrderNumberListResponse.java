@@ -8,7 +8,7 @@ import lombok.Data;
 @Builder
 public class WorkOrderNumberListResponse {
 
-    private List<String> workOrderNumbers;
+    private List<WorkOrderNumberOptionDto> workOrderNumbers;
     private List<String> favouriteWorkOrderNumbers;
     private int page;
     private int size;

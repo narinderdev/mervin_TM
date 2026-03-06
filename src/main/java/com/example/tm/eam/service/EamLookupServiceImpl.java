@@ -21,6 +21,7 @@ import com.example.tm.eam.dto.WorkOrderDetailsResponse;
 import com.example.tm.eam.dto.WorkOrderGlAccountListResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
 import com.example.tm.eam.dto.WorkOrderNumberListResponse;
+import com.example.tm.eam.dto.WorkOrderNumberOptionDto;
 import com.example.tm.eam.dto.WorkRequestTypePropertyUnitListResponse;
 import com.example.tm.shared.exception.ResourceNotFoundException;
 import java.sql.Timestamp;
@@ -391,7 +392,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size) {
+    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -403,19 +404,30 @@ public class EamLookupServiceImpl implements EamLookupService {
                   AND wo.work_order_number IS NOT NULL
                   AND LTRIM(RTRIM(wo.work_order_number)) <> ''
                 """);
-        List<String> workOrderNumbers = jdbcTemplate.queryForList("""
-                SELECT DISTINCT wo.work_order_number
-                FROM work_orders wo
-                WHERE wo.deleted = 0
-                  AND wo.work_order_number IS NOT NULL
-                  AND LTRIM(RTRIM(wo.work_order_number)) <> ''
-                ORDER BY wo.work_order_number ASC
+        List<WorkOrderNumberOptionDto> workOrderNumbers = jdbcTemplate.query("""
+                SELECT x.id, x.work_order_number
+                FROM (
+                    SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+                    FROM work_orders wo
+                    WHERE wo.deleted = 0
+                      AND wo.work_order_number IS NOT NULL
+                      AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                    GROUP BY LTRIM(RTRIM(wo.work_order_number))
+                ) x
+                ORDER BY x.work_order_number ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, String.class, offset, safeSize);
+                """,
+                (rs, rowNum) -> WorkOrderNumberOptionDto.builder()
+                        .id(rs.getLong("id"))
+                        .workOrderNumber(rs.getString("work_order_number"))
+                        .build(),
+                offset,
+                safeSize);
+        List<String> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId);
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
-                .favouriteWorkOrderNumbers(List.of())
+                .favouriteWorkOrderNumbers(favouriteWorkOrderNumbers)
                 .page(safePage)
                 .size(safeSize)
                 .totalElements(total)
@@ -622,10 +634,12 @@ public class EamLookupServiceImpl implements EamLookupService {
 
         ensureTechnicianExistsTm(technicianId);
         List<Long> workOrderIds = tmJdbcTemplate.query("""
-                        SELECT work_order_id
-                        FROM work_order_favourites
-                        WHERE technician_id = ?
-                        ORDER BY created_at DESC, id DESC
+                        SELECT f.work_order_id
+                        FROM work_order_favourites f
+                        JOIN technicians t ON t.id = f.technician_id
+                        WHERE f.technician_id = ?
+                          AND t.is_deleted = 0
+                        ORDER BY f.created_at DESC, f.id DESC
                         """,
                 (rs, rowNum) -> rs.getLong("work_order_id"),
                 technicianId);

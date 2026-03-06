@@ -27,12 +27,14 @@ public class EamLookupController {
     public ResponseEntity<ApiResponse<?>> getWorkOrderNumbers(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "100") int size,
+            @RequestParam("technicianId") Long technicianId,
             HttpServletRequest request) {
-        log.info("EAM GET /work-orders/numbers page={} size={} cid={}", page, size, correlationId(request));
+        log.info("EAM GET /work-orders/numbers page={} size={} technicianId={} cid={}",
+                page, size, technicianId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(),
                 "Work order numbers fetched successfully",
-                eamLookupService.getWorkOrderNumbers(page, size)));
+                eamLookupService.getWorkOrderNumbers(page, size, technicianId)));
     }
 
     @GetMapping("/work-orders/gl-accounts")
