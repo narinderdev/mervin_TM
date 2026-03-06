@@ -466,8 +466,8 @@ public class EamLookupServiceImpl implements EamLookupService {
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
 
-        String propertyUnitColumn = resolveWorkRequestTypePropertyUnitColumn();
-        if (propertyUnitColumn == null) {
+        PropertyUnitSource propertyUnitSource = resolveWorkRequestTypePropertyUnitSource();
+        if (propertyUnitSource == null) {
             return WorkRequestTypePropertyUnitListResponse.builder()
                     .propertyUnits(List.of())
                     .page(safePage)
@@ -478,21 +478,22 @@ public class EamLookupServiceImpl implements EamLookupService {
                     .build();
         }
 
-        String quotedColumn = "[" + propertyUnitColumn.replace("]", "]]") + "]";
+        String quotedTable = "[" + propertyUnitSource.tableName().replace("]", "]]") + "]";
+        String quotedColumn = "[" + propertyUnitSource.columnName().replace("]", "]]") + "]";
         String totalSql = """
-                SELECT COUNT(DISTINCT LTRIM(RTRIM(wrt.%s)))
-                FROM work_request_types wrt
-                WHERE wrt.%s IS NOT NULL
-                  AND LTRIM(RTRIM(wrt.%s)) <> ''
-                """.formatted(quotedColumn, quotedColumn, quotedColumn);
+                SELECT COUNT(DISTINCT LTRIM(RTRIM(src.%s)))
+                FROM %s src
+                WHERE src.%s IS NOT NULL
+                  AND LTRIM(RTRIM(src.%s)) <> ''
+                """.formatted(quotedColumn, quotedTable, quotedColumn, quotedColumn);
         String listSql = """
-                SELECT DISTINCT LTRIM(RTRIM(wrt.%s)) AS property_unit
-                FROM work_request_types wrt
-                WHERE wrt.%s IS NOT NULL
-                  AND LTRIM(RTRIM(wrt.%s)) <> ''
+                SELECT DISTINCT LTRIM(RTRIM(src.%s)) AS property_unit
+                FROM %s src
+                WHERE src.%s IS NOT NULL
+                  AND LTRIM(RTRIM(src.%s)) <> ''
                 ORDER BY property_unit ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """.formatted(quotedColumn, quotedColumn, quotedColumn);
+                """.formatted(quotedColumn, quotedTable, quotedColumn, quotedColumn);
 
         long total = queryLong(totalSql);
         List<String> propertyUnits = jdbcTemplate.queryForList(listSql, String.class, offset, safeSize);
@@ -508,23 +509,35 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
-    private String resolveWorkRequestTypePropertyUnitColumn() {
+    private PropertyUnitSource resolveWorkRequestTypePropertyUnitSource() {
+        List<String> preferredTables = List.of(
+                "work_request_types",
+                "work_order_types"
+        );
         List<String> preferred = List.of(
                 "property_unit",
                 "propertyunit",
                 "unit",
                 "accounting_unit"
         );
-        for (String candidate : preferred) {
-            if (columnExists("work_request_types", candidate)) {
-                return candidate;
+
+        for (String table : preferredTables) {
+            if (!tableExists(table)) {
+                continue;
+            }
+            for (String candidate : preferred) {
+                if (columnExists(table, candidate)) {
+                    return new PropertyUnitSource(table, candidate);
+                }
             }
         }
 
-        List<String> guessed = jdbcTemplate.queryForList("""
-                SELECT TOP 1 c.COLUMN_NAME
+        List<Map<String, Object>> guessed = jdbcTemplate.queryForList("""
+                SELECT TOP 1
+                    c.TABLE_NAME AS table_name,
+                    c.COLUMN_NAME AS column_name
                 FROM INFORMATION_SCHEMA.COLUMNS c
-                WHERE c.TABLE_NAME = 'work_request_types'
+                WHERE c.TABLE_NAME IN ('work_request_types', 'work_order_types')
                   AND (
                       LOWER(c.COLUMN_NAME) LIKE '%property%unit%'
                       OR LOWER(c.COLUMN_NAME) LIKE '%unit%'
@@ -532,14 +545,23 @@ public class EamLookupServiceImpl implements EamLookupService {
                   )
                 ORDER BY
                   CASE
+                      WHEN LOWER(c.TABLE_NAME) = 'work_request_types' THEN 0
+                      WHEN LOWER(c.TABLE_NAME) = 'work_order_types' THEN 1
+                      ELSE 2
+                  END,
+                  CASE
                       WHEN LOWER(c.COLUMN_NAME) = 'property_unit' THEN 0
                       WHEN LOWER(c.COLUMN_NAME) LIKE '%property%unit%' THEN 1
                       WHEN LOWER(c.COLUMN_NAME) LIKE '%unit%' THEN 2
                       ELSE 3
                   END,
                   c.ORDINAL_POSITION
-                """, String.class);
-        return guessed.isEmpty() ? null : guessed.get(0);
+                """);
+        if (guessed.isEmpty()) {
+            return null;
+        }
+        Map<String, Object> row = guessed.get(0);
+        return new PropertyUnitSource(asString(row.get("table_name")), asString(row.get("column_name")));
     }
 
     @Override
@@ -1669,6 +1691,16 @@ public class EamLookupServiceImpl implements EamLookupService {
         return count > 0;
     }
 
+    private boolean tableExists(String tableName) {
+        long count = queryLong("""
+                SELECT COUNT(1)
+                FROM INFORMATION_SCHEMA.TABLES
+                WHERE TABLE_TYPE = 'BASE TABLE'
+                  AND TABLE_NAME = ?
+                """, tableName);
+        return count > 0;
+    }
+
     private String formatTimeAgo(LocalDateTime value) {
         if (value == null) {
             return "just now";
@@ -1800,5 +1832,8 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     private record Window(LocalDateTime start, LocalDateTime end) {
+    }
+
+    private record PropertyUnitSource(String tableName, String columnName) {
     }
 }
