@@ -1,6 +1,7 @@
 package com.example.tm.timesheet.controller;
 
 import com.example.tm.auth.security.TmJwtService;
+import com.example.tm.timesheet.dto.TimesheetRecentEntryResponseDto;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.service.TimesheetService;
@@ -58,6 +59,11 @@ public class TimesheetController {
     @GetMapping("/technicians/{technicianId}")
     public List<TimesheetResponseDto> getByTechnician(@PathVariable("technicianId") Long technicianId) {
         return timesheetService.getByTechnician(technicianId);
+    }
+
+    @GetMapping("/technicians/{technicianId}/recent-entry")
+    public TimesheetRecentEntryResponseDto getRecentEntryByTechnician(@PathVariable("technicianId") Long technicianId) {
+        return timesheetService.getRecentEntryByTechnician(technicianId);
     }
 
     @PostMapping("/{id}/approve")

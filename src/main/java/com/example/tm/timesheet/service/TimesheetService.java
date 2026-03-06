@@ -1,6 +1,7 @@
 package com.example.tm.timesheet.service;
 
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
+import com.example.tm.timesheet.dto.TimesheetRecentEntryResponseDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import java.util.List;
 
@@ -19,4 +20,6 @@ public interface TimesheetService {
     TimesheetResponseDto approve(Long id);
 
     List<TimesheetResponseDto> getByTechnician(Long technicianId);
+
+    TimesheetRecentEntryResponseDto getRecentEntryByTechnician(Long technicianId);
 }

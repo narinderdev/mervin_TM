@@ -5,6 +5,7 @@ import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.shared.exception.ResourceNotFoundException;
 import com.example.tm.timesheet.dto.TimesheetDayRequestDto;
 import com.example.tm.timesheet.dto.TimesheetDayResponseDto;
+import com.example.tm.timesheet.dto.TimesheetRecentEntryResponseDto;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRowRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRowResponseDto;
@@ -12,12 +13,14 @@ import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.entity.Timesheet;
 import com.example.tm.timesheet.entity.TimesheetDay;
 import com.example.tm.timesheet.entity.TimesheetRow;
+import com.example.tm.timesheet.repo.TimesheetRowRepository;
 import com.example.tm.timesheet.repo.TimesheetRepository;
 import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +32,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class TimesheetServiceImpl implements TimesheetService {
 
     private final TimesheetRepository timesheetRepository;
+    private final TimesheetRowRepository timesheetRowRepository;
     private final TmUserRepository tmUserRepository;
 
     @Value("${timesheet.pay-period-grace-days:2}")
@@ -104,6 +108,28 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
+    public TimesheetRecentEntryResponseDto getRecentEntryByTechnician(Long technicianId) {
+        if (technicianId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "technicianId is required");
+        }
+
+        List<TimesheetRow> rows = timesheetRowRepository.findRecentRowsByTechnicianId(technicianId, PageRequest.of(0, 1));
+        if (rows.isEmpty()) {
+            throw new ResourceNotFoundException("No timesheet entries found for technician: " + technicianId);
+        }
+
+        TimesheetRow row = rows.get(0);
+        return TimesheetRecentEntryResponseDto.builder()
+                .technicianId(technicianId)
+                .project(row.getActivity())
+                .payCode(row.getPayCode())
+                .department(row.getAccountingUnit())
+                .account(row.getFerc())
+                .build();
     }
 
     @Override
