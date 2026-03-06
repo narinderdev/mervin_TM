@@ -47,7 +47,7 @@ public interface EamLookupService {
 
     TechnicianTeamListResponse getTechnicianTeams(int page, int size);
 
-    WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId);
+    WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size);
 
     WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size);
 

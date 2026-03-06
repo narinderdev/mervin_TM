@@ -391,7 +391,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId) {
+    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -412,12 +412,10 @@ public class EamLookupServiceImpl implements EamLookupService {
                 ORDER BY wo.work_order_number ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
                 """, String.class, offset, safeSize);
-        List<String> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId);
-
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
-                .favouriteWorkOrderNumbers(favouriteWorkOrderNumbers)
+                .favouriteWorkOrderNumbers(List.of())
                 .page(safePage)
                 .size(safeSize)
                 .totalElements(total)
