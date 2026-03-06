@@ -52,6 +52,10 @@ public class TimesheetRequestDto {
     @JsonProperty("timesheet_days")
     private List<TimesheetDayRequestDto> timesheetDays;
 
+    @JsonProperty("save_as_template")
+    @JsonAlias("saveAsTemplate")
+    private Boolean saveAsTemplate;
+
     public LocalDate getPeriodStartDate() {
         return periodStartDate;
     }
@@ -114,5 +118,13 @@ public class TimesheetRequestDto {
 
     public void setTimesheetDays(List<TimesheetDayRequestDto> timesheetDays) {
         this.timesheetDays = timesheetDays;
+    }
+
+    public Boolean getSaveAsTemplate() {
+        return saveAsTemplate;
+    }
+
+    public void setSaveAsTemplate(Boolean saveAsTemplate) {
+        this.saveAsTemplate = saveAsTemplate;
     }
 }

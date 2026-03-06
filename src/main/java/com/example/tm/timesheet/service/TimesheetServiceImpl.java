@@ -16,7 +16,6 @@ import com.example.tm.timesheet.entity.TimesheetRow;
 import com.example.tm.timesheet.repo.TimesheetRowRepository;
 import com.example.tm.timesheet.repo.TimesheetRepository;
 import java.time.LocalDate;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,7 +40,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     @Override
     public TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole) {
         requireActorRole(actorRole);
-        validateMonthlyPeriod(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
+        validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
         validateDayDatesWithinPeriod(requestDto);
         if (isTechnicianRole(actorRole)) {
             rejectIfLockedByDeadline(computeDeadlineDate(requestDto.getPeriodEndDate()));
@@ -78,7 +77,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         if (isTechnicianRole(actorRole)) {
             rejectIfLockedByDeadline(resolveDeadlineDate(existing));
         }
-        validateMonthlyPeriod(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
+        validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
         validateDayDatesWithinPeriod(requestDto);
 
         boolean periodChanged = !requestDto.getPeriodStartDate().equals(existing.getPeriodStartDate())
@@ -119,7 +118,7 @@ public class TimesheetServiceImpl implements TimesheetService {
 
         List<TimesheetRow> rows = timesheetRowRepository.findRecentRowsByTechnicianId(technicianId, PageRequest.of(0, 1));
         if (rows.isEmpty()) {
-            throw new ResourceNotFoundException("No timesheet entries found for technician: " + technicianId);
+            throw new ResourceNotFoundException("No saved template");
         }
 
         TimesheetRow row = rows.get(0);
@@ -129,6 +128,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .payCode(row.getPayCode())
                 .department(row.getAccountingUnit())
                 .account(row.getFerc())
+                .totalHours(row.getHours())
                 .build();
     }
 
@@ -155,6 +155,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setTotalWorked(requestDto.getTotalWorked());
         entity.setTotalNonWorked(requestDto.getTotalNonWorked());
         entity.setTotalPremium(requestDto.getTotalPremium());
+        entity.setSaveAsTemplate(Boolean.TRUE.equals(requestDto.getSaveAsTemplate()));
         // For updates, remove existing days and flush so unique (timesheet_id, date) constraints
         // are cleared before inserting replacement rows.
         if (entity.getId() != null && !entity.getTimesheetDays().isEmpty()) {
@@ -207,6 +208,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .totalNonWorked(entity.getTotalNonWorked())
                 .totalPremium(entity.getTotalPremium())
                 .status(entity.getStatus() == null ? "PENDING" : entity.getStatus())
+                .saveAsTemplate(Boolean.TRUE.equals(entity.getSaveAsTemplate()))
                 .timesheetDays(days)
                 .build();
     }
@@ -272,19 +274,14 @@ public class TimesheetServiceImpl implements TimesheetService {
         }
     }
 
-    private void validateMonthlyPeriod(LocalDate periodStartDate, LocalDate periodEndDate) {
+    private void validatePeriodRange(LocalDate periodStartDate, LocalDate periodEndDate) {
         if (periodStartDate == null || periodEndDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "period_start_date and period_end_date are required");
         }
-        if (periodStartDate.getDayOfMonth() != 1) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "period_start_date must be the first day of the month");
-        }
-
-        LocalDate expectedEnd = periodStartDate.with(TemporalAdjusters.lastDayOfMonth());
-        if (!expectedEnd.equals(periodEndDate)) {
+        if (periodEndDate.isBefore(periodStartDate)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "period_end_date must be the last day of the same month as period_start_date");
+                    "period_end_date must be on or after period_start_date");
         }
     }
 

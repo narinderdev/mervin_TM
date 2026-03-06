@@ -29,5 +29,6 @@ public class TimesheetResponseDto {
     private BigDecimal totalNonWorked;
     private BigDecimal totalPremium;
     private String status;
+    private Boolean saveAsTemplate;
     private List<TimesheetDayResponseDto> timesheetDays;
 }

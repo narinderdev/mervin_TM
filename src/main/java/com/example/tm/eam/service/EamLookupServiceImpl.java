@@ -423,7 +423,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                         .build(),
                 offset,
                 safeSize);
-        List<String> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId);
+        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId);
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
@@ -627,7 +627,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return workOrder;
     }
 
-    private List<String> getFavouriteWorkOrderNumbers(Long technicianId) {
+    private List<WorkOrderNumberOptionDto> getFavouriteWorkOrderNumbers(Long technicianId) {
         if (technicianId == null) {
             return List.of();
         }
@@ -667,14 +667,18 @@ public class EamLookupServiceImpl implements EamLookupService {
             }
         }
 
-        Set<String> orderedUnique = new LinkedHashSet<>();
+        Set<Long> orderedUniqueIds = new LinkedHashSet<>();
         for (Long workOrderId : workOrderIds) {
-            String number = numberById.get(workOrderId);
-            if (number != null && !number.isBlank()) {
-                orderedUnique.add(number);
+            if (numberById.containsKey(workOrderId)) {
+                orderedUniqueIds.add(workOrderId);
             }
         }
-        return new ArrayList<>(orderedUnique);
+        return orderedUniqueIds.stream()
+                .map(id -> WorkOrderNumberOptionDto.builder()
+                        .id(id)
+                        .workOrderNumber(numberById.get(id))
+                        .build())
+                .toList();
     }
 
     @Override

@@ -58,6 +58,9 @@ public class Timesheet {
     @Column(name = "status", length = 20)
     private String status;
 
+    @Column(name = "save_as_template")
+    private Boolean saveAsTemplate;
+
     @OneToMany(mappedBy = "timesheet", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetDay> timesheetDays = new ArrayList<>();
 

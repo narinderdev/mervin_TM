@@ -15,6 +15,7 @@ public interface TimesheetRowRepository extends JpaRepository<TimesheetRow, Long
             JOIN r.timesheetDay d
             JOIN d.timesheet t
             WHERE t.technicianId = :technicianId
+              AND t.saveAsTemplate = true
               AND COALESCE(r.isDeleted, false) = false
             ORDER BY r.id DESC
             """)
