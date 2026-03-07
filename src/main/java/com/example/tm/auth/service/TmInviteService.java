@@ -32,13 +32,13 @@ public class TmInviteService {
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
 
-    @Value("${app.frontend.set-password-url:http://3.82.49.182:4500/set-password}")
+    @Value("${app.frontend.set-password-url:https://a646-203-190-154-162.ngrok-free.app/set-password}")
     private String setPasswordUrl;
 
     @Value("${spring.application.name:tm}")
     private String applicationName;
 
-    @Value("${app.invite.accept-url:http://3.82.49.182:8083/api/invitations/accept}")
+    @Value("${app.invite.accept-url:https://3ce4-203-190-154-162.ngrok-free.app/api/invitations/accept}")
     private String acceptUrl;
 
     /**

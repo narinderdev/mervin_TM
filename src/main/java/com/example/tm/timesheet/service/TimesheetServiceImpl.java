@@ -16,7 +16,11 @@ import com.example.tm.timesheet.entity.TimesheetRow;
 import com.example.tm.timesheet.repo.TimesheetRowRepository;
 import com.example.tm.timesheet.repo.TimesheetRepository;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
@@ -30,25 +34,32 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional(transactionManager = "tmTransactionManager")
 public class TimesheetServiceImpl implements TimesheetService {
 
+    private static final String VIEW_TYPE_WEEKLY = "WEEKLY";
+    private static final String VIEW_TYPE_BIWEEKLY = "BIWEEKLY";
+    private static final String VIEW_TYPE_MONTHLY = "MONTHLY";
+    private static final Set<String> SUPPORTED_VIEW_TYPES = Set.of(
+            VIEW_TYPE_WEEKLY,
+            VIEW_TYPE_BIWEEKLY,
+            VIEW_TYPE_MONTHLY);
+
     private final TimesheetRepository timesheetRepository;
     private final TimesheetRowRepository timesheetRowRepository;
     private final TmUserRepository tmUserRepository;
 
-    @Value("${timesheet.pay-period-grace-days:2}")
+    @Value("${timesheet.pay-period-grace-days:3}")
     private int payPeriodGraceDays;
 
     @Override
     public TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole) {
         requireActorRole(actorRole);
-        validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
+        String normalizedViewType = normalizeViewType(requestDto.getViewType());
+        validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
         validateDayDatesWithinPeriod(requestDto);
-        if (isTechnicianRole(actorRole)) {
-            rejectIfLockedByDeadline(computeDeadlineDate(requestDto.getPeriodEndDate()));
-        }
+        rejectIfLockedByDeadline(computeDeadlineDate(requestDto.getPeriodEndDate()));
         rejectDuplicatePeriod(requestDto.getTechnicianId(), requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), null);
 
         Timesheet entity = new Timesheet();
-        populateEntity(requestDto, entity);
+        populateEntity(requestDto, entity, normalizedViewType);
         applyPayPeriodDates(entity);
         entity.setStatus("PENDING");
 
@@ -77,7 +88,8 @@ public class TimesheetServiceImpl implements TimesheetService {
         if (isTechnicianRole(actorRole)) {
             rejectIfLockedByDeadline(resolveDeadlineDate(existing));
         }
-        validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
+        String normalizedViewType = normalizeViewType(requestDto.getViewType());
+        validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
         validateDayDatesWithinPeriod(requestDto);
 
         boolean periodChanged = !requestDto.getPeriodStartDate().equals(existing.getPeriodStartDate())
@@ -87,7 +99,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         }
 
         rejectDuplicatePeriod(requestDto.getTechnicianId(), requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), id);
-        populateEntity(requestDto, existing);
+        populateEntity(requestDto, existing, normalizedViewType);
         applyPayPeriodDates(existing);
 
         return toResponse(timesheetRepository.save(existing));
@@ -147,10 +159,10 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .orElseThrow(() -> new ResourceNotFoundException("Timesheet not found: " + id));
     }
 
-    private void populateEntity(TimesheetRequestDto requestDto, Timesheet entity) {
+    private void populateEntity(TimesheetRequestDto requestDto, Timesheet entity, String normalizedViewType) {
         entity.setPeriodStartDate(requestDto.getPeriodStartDate());
         entity.setPeriodEndDate(requestDto.getPeriodEndDate());
-        entity.setViewType(requestDto.getViewType());
+        entity.setViewType(normalizedViewType);
         entity.setTechnicianId(requestDto.getTechnicianId());
         entity.setTotalWorked(requestDto.getTotalWorked());
         entity.setTotalNonWorked(requestDto.getTotalNonWorked());
@@ -274,7 +286,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         }
     }
 
-    private void validatePeriodRange(LocalDate periodStartDate, LocalDate periodEndDate) {
+    private void validatePeriodRange(LocalDate periodStartDate, LocalDate periodEndDate, String viewType) {
         if (periodStartDate == null || periodEndDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "period_start_date and period_end_date are required");
         }
@@ -282,6 +294,33 @@ public class TimesheetServiceImpl implements TimesheetService {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "period_end_date must be on or after period_start_date");
+        }
+
+        long totalDays = ChronoUnit.DAYS.between(periodStartDate, periodEndDate) + 1;
+        switch (viewType) {
+            case VIEW_TYPE_WEEKLY -> {
+                if (totalDays != 7) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "WEEKLY pay period must be exactly 7 days");
+                }
+            }
+            case VIEW_TYPE_BIWEEKLY -> {
+                if (totalDays != 14) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "BIWEEKLY pay period must be exactly 14 days");
+                }
+            }
+            case VIEW_TYPE_MONTHLY -> {
+                LocalDate expectedMonthEnd = periodStartDate.with(TemporalAdjusters.lastDayOfMonth());
+                if (periodStartDate.getDayOfMonth() != 1 || !periodEndDate.equals(expectedMonthEnd)) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "MONTHLY pay period must start on day 1 and end on the last day of the same month");
+                }
+            }
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported view_type: " + viewType);
         }
     }
 
@@ -338,6 +377,19 @@ public class TimesheetServiceImpl implements TimesheetService {
 
     private String resolvePayPeriodStatus(Timesheet entity) {
         return LocalDate.now().isAfter(resolveDeadlineDate(entity)) ? "LOCKED" : "OPEN";
+    }
+
+    private String normalizeViewType(String viewType) {
+        if (viewType == null || viewType.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "view_type is required");
+        }
+        String normalized = viewType.trim().toUpperCase(Locale.ROOT);
+        if (!SUPPORTED_VIEW_TYPES.contains(normalized)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "view_type must be one of: WEEKLY, BIWEEKLY, MONTHLY");
+        }
+        return normalized;
     }
 
     private void requireActorRole(String actorRole) {
