@@ -57,6 +57,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     @Override
     public TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole) {
         requireActorRole(actorRole);
+        validateTechnicianId(requestDto.getTechnicianId());
         String normalizedViewType = normalizeViewType(requestDto.getViewType());
         validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
         validateDayDatesWithinPeriod(requestDto);
@@ -74,6 +75,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     @Override
     public TimesheetResponseDto saveDraft(TimesheetRequestDto requestDto, String actorRole) {
         requireActorRole(actorRole);
+        validateTechnicianId(requestDto.getTechnicianId());
         String normalizedViewType = normalizeViewType(requestDto.getViewType());
         validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
         validateDayDatesWithinPeriod(requestDto);
@@ -108,6 +110,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     @Override
     public TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto, String actorRole) {
         requireActorRole(actorRole);
+        validateTechnicianId(requestDto.getTechnicianId());
         Timesheet existing = findByIdOrThrow(id);
         if (isTechnicianRole(actorRole)) {
             rejectIfLockedByDeadline(resolveDeadlineDate(existing));
@@ -492,6 +495,12 @@ public class TimesheetServiceImpl implements TimesheetService {
                         "timesheet_days date " + date + " is outside pay period " + start + " to " + end);
             }
         });
+    }
+
+    private void validateTechnicianId(Long technicianId) {
+        if (technicianId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "technician_id is required");
+        }
     }
 
     private void validateCurrentPayPeriod(LocalDate periodStartDate, LocalDate periodEndDate) {

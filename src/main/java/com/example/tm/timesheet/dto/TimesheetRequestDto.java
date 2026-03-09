@@ -25,7 +25,6 @@ public class TimesheetRequestDto {
     @JsonProperty("view_type")
     private String viewType;
 
-    @NotNull
     @JsonProperty("technician_id")
     private Long technicianId;
 
