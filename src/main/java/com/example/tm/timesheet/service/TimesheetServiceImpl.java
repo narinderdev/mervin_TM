@@ -73,8 +73,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     }
 
     @Override
-    public TimesheetResponseDto saveDraft(TimesheetRequestDto requestDto, String actorRole) {
-        requireActorRole(actorRole);
+    public TimesheetResponseDto saveDraft(TimesheetRequestDto requestDto) {
         validateTechnicianId(requestDto.getTechnicianId());
         String normalizedViewType = normalizeViewType(requestDto.getViewType());
         validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);

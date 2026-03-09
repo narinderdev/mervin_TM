@@ -129,7 +129,7 @@ class TimesheetServiceImplTest {
         });
         when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
 
-        TimesheetResponseDto response = timesheetService.saveDraft(request, "TECHNICIAN");
+        TimesheetResponseDto response = timesheetService.saveDraft(request);
 
         assertEquals(501L, response.getId());
         assertEquals("DRAFT", response.getStatus());
@@ -146,7 +146,7 @@ class TimesheetServiceImplTest {
 
         ResponseStatusException ex = assertThrows(
                 ResponseStatusException.class,
-                () -> timesheetService.saveDraft(request, "TECHNICIAN"));
+                () -> timesheetService.saveDraft(request));
 
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         assertTrue(ex.getReason().contains("currently selected pay period"));

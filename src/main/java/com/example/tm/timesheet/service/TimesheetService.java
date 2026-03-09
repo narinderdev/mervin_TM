@@ -10,7 +10,7 @@ public interface TimesheetService {
 
     TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole);
 
-    TimesheetResponseDto saveDraft(TimesheetRequestDto requestDto, String actorRole);
+    TimesheetResponseDto saveDraft(TimesheetRequestDto requestDto);
 
     List<TimesheetResponseDto> getAll();
 

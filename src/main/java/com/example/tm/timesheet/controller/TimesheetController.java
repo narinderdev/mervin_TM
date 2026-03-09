@@ -43,14 +43,12 @@ public class TimesheetController {
     @PostMapping("/drafts")
     public TimesheetResponseDto saveDraft(
             @RequestParam("technicianId") Long technicianId,
-            @Valid @RequestBody TimesheetRequestDto requestDto,
-            @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+            @Valid @RequestBody TimesheetRequestDto requestDto) {
         if (requestDto.getTechnicianId() != null && !technicianId.equals(requestDto.getTechnicianId())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "technicianId in params and body must match");
         }
         requestDto.setTechnicianId(technicianId);
-        String actorRole = extractRoleFromAuthorizationHeader(authorizationHeader);
-        return timesheetService.saveDraft(requestDto, actorRole);
+        return timesheetService.saveDraft(requestDto);
     }
 
     @GetMapping
