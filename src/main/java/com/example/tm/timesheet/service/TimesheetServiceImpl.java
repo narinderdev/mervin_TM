@@ -10,9 +10,13 @@ import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRowRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRowResponseDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
+import com.example.tm.timesheet.entity.TimesheetDraft;
+import com.example.tm.timesheet.entity.TimesheetDraftDay;
+import com.example.tm.timesheet.entity.TimesheetDraftRow;
 import com.example.tm.timesheet.entity.Timesheet;
 import com.example.tm.timesheet.entity.TimesheetDay;
 import com.example.tm.timesheet.entity.TimesheetRow;
+import com.example.tm.timesheet.repo.TimesheetDraftRepository;
 import com.example.tm.timesheet.repo.TimesheetRowRepository;
 import com.example.tm.timesheet.repo.TimesheetRepository;
 import java.time.LocalDate;
@@ -43,6 +47,7 @@ public class TimesheetServiceImpl implements TimesheetService {
             VIEW_TYPE_MONTHLY);
 
     private final TimesheetRepository timesheetRepository;
+    private final TimesheetDraftRepository timesheetDraftRepository;
     private final TimesheetRowRepository timesheetRowRepository;
     private final TmUserRepository tmUserRepository;
 
@@ -64,6 +69,25 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setStatus("PENDING");
 
         return toResponse(timesheetRepository.save(entity));
+    }
+
+    @Override
+    public TimesheetResponseDto saveDraft(TimesheetRequestDto requestDto, String actorRole) {
+        requireActorRole(actorRole);
+        String normalizedViewType = normalizeViewType(requestDto.getViewType());
+        validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
+        validateDayDatesWithinPeriod(requestDto);
+        validateCurrentPayPeriod(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
+
+        TimesheetDraft draft = timesheetDraftRepository
+                .findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
+                        requestDto.getTechnicianId(),
+                        requestDto.getPeriodStartDate(),
+                        requestDto.getPeriodEndDate())
+                .orElseGet(TimesheetDraft::new);
+
+        populateDraftEntity(requestDto, draft, normalizedViewType);
+        return toDraftResponse(timesheetDraftRepository.save(draft));
     }
 
     @Override
@@ -119,6 +143,30 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .stream()
                 .map(this::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
+    public TimesheetResponseDto getDraftByTechnicianAndPeriod(Long technicianId, LocalDate periodStartDate, LocalDate periodEndDate) {
+        if (technicianId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "technicianId is required");
+        }
+        if (periodStartDate == null || periodEndDate == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "period_start_date and period_end_date are required");
+        }
+        if (periodEndDate.isBefore(periodStartDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "period_end_date must be on or after period_start_date");
+        }
+        validateCurrentPayPeriod(periodStartDate, periodEndDate);
+
+        TimesheetDraft draft = timesheetDraftRepository
+                .findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(technicianId, periodStartDate, periodEndDate)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Timesheet draft not found for technician " + technicianId + " and period " + periodStartDate + " to " + periodEndDate));
+
+        return toDraftResponse(draft);
     }
 
     @Override
@@ -186,6 +234,26 @@ public class TimesheetServiceImpl implements TimesheetService {
         });
     }
 
+    private void populateDraftEntity(TimesheetRequestDto requestDto, TimesheetDraft entity, String normalizedViewType) {
+        entity.setPeriodStartDate(requestDto.getPeriodStartDate());
+        entity.setPeriodEndDate(requestDto.getPeriodEndDate());
+        entity.setViewType(normalizedViewType);
+        entity.setTechnicianId(requestDto.getTechnicianId());
+        entity.setTotalWorked(requestDto.getTotalWorked());
+        entity.setTotalNonWorked(requestDto.getTotalNonWorked());
+        entity.setTotalPremium(requestDto.getTotalPremium());
+        entity.setSaveAsTemplate(Boolean.TRUE.equals(requestDto.getSaveAsTemplate()));
+        entity.clearDays();
+        requestDto.getTimesheetDays().forEach(dayDto -> {
+            TimesheetDraftDay day = toDraftDayEntity(dayDto);
+            dayDto.getRows()
+                    .stream()
+                    .map(rowDto -> toDraftRowEntity(day, rowDto))
+                    .forEach(day::addRow);
+            entity.addDay(day);
+        });
+    }
+
     private TimesheetResponseDto toResponse(Timesheet entity) {
         TmUser technician = entity.getTechnicianId() == null
                 ? null
@@ -225,8 +293,59 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
+    private TimesheetResponseDto toDraftResponse(TimesheetDraft entity) {
+        TmUser technician = entity.getTechnicianId() == null
+                ? null
+                : tmUserRepository.findById(entity.getTechnicianId()).orElse(null);
+
+        String technicianFirstName = technician == null ? null : technician.getFirstName();
+        String technicianLastName = technician == null ? null : technician.getLastName();
+        String technicianName = (technicianFirstName == null && technicianLastName == null)
+                ? null
+                : String.join(" ", technicianFirstName == null ? "" : technicianFirstName,
+                        technicianLastName == null ? "" : technicianLastName).trim();
+
+        List<TimesheetDayResponseDto> days = entity.getTimesheetDays()
+                .stream()
+                .map(this::toDraftDayResponse)
+                .toList();
+
+        LocalDate deadlineDate = computeDeadlineDate(entity.getPeriodEndDate());
+        LocalDate lockDate = deadlineDate.plusDays(1);
+        String payPeriodStatus = LocalDate.now().isAfter(deadlineDate) ? "LOCKED" : "OPEN";
+
+        return TimesheetResponseDto.builder()
+                .id(entity.getId())
+                .periodStartDate(entity.getPeriodStartDate())
+                .periodEndDate(entity.getPeriodEndDate())
+                .deadlineDate(deadlineDate)
+                .lockDate(lockDate)
+                .payPeriodStatus(payPeriodStatus)
+                .adminUnlocked(Boolean.FALSE)
+                .viewType(entity.getViewType())
+                .technicianId(entity.getTechnicianId())
+                .technicianFirstName(technicianFirstName)
+                .technicianLastName(technicianLastName)
+                .technicianName(technicianName)
+                .totalWorked(entity.getTotalWorked())
+                .totalNonWorked(entity.getTotalNonWorked())
+                .totalPremium(entity.getTotalPremium())
+                .status("DRAFT")
+                .saveAsTemplate(Boolean.TRUE.equals(entity.getSaveAsTemplate()))
+                .timesheetDays(days)
+                .build();
+    }
+
     private TimesheetDay toDayEntity(TimesheetDayRequestDto dayDto) {
         TimesheetDay day = new TimesheetDay();
+        day.setDate(dayDto.getDate());
+        day.setDayOfWeek(dayDto.getDayOfWeek());
+        day.setDailyTotal(dayDto.getDailyTotal());
+        return day;
+    }
+
+    private TimesheetDraftDay toDraftDayEntity(TimesheetDayRequestDto dayDto) {
+        TimesheetDraftDay day = new TimesheetDraftDay();
         day.setDate(dayDto.getDate());
         day.setDayOfWeek(dayDto.getDayOfWeek());
         day.setDailyTotal(dayDto.getDailyTotal());
@@ -246,6 +365,19 @@ public class TimesheetServiceImpl implements TimesheetService {
         return row;
     }
 
+    private TimesheetDraftRow toDraftRowEntity(TimesheetDraftDay day, TimesheetRowRequestDto rowDto) {
+        TimesheetDraftRow row = new TimesheetDraftRow();
+        row.setTimesheetDraftDay(day);
+        row.setPayCode(rowDto.getPayCode());
+        row.setHours(rowDto.getHours());
+        row.setAccountingUnit(rowDto.getAccountingUnit());
+        row.setFerc(rowDto.getFerc());
+        row.setActivity(rowDto.getActivity());
+        row.setComment(rowDto.getComment());
+        row.setIsDeleted(rowDto.getIsDeleted());
+        return row;
+    }
+
     private TimesheetDayResponseDto toDayResponse(TimesheetDay day) {
         return TimesheetDayResponseDto.builder()
                 .date(day.getDate())
@@ -255,7 +387,29 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
+    private TimesheetDayResponseDto toDraftDayResponse(TimesheetDraftDay day) {
+        return TimesheetDayResponseDto.builder()
+                .date(day.getDate())
+                .dayOfWeek(day.getDayOfWeek())
+                .dailyTotal(day.getDailyTotal())
+                .rows(day.getRows().stream().map(this::toDraftRowResponse).toList())
+                .build();
+    }
+
     private TimesheetRowResponseDto toRowResponse(TimesheetRow row) {
+        return TimesheetRowResponseDto.builder()
+                .id(row.getId())
+                .payCode(row.getPayCode())
+                .hours(row.getHours())
+                .accountingUnit(row.getAccountingUnit())
+                .ferc(row.getFerc())
+                .activity(row.getActivity())
+                .comment(row.getComment())
+                .isDeleted(row.getIsDeleted())
+                .build();
+    }
+
+    private TimesheetRowResponseDto toDraftRowResponse(TimesheetDraftRow row) {
         return TimesheetRowResponseDto.builder()
                 .id(row.getId())
                 .payCode(row.getPayCode())
@@ -338,6 +492,15 @@ public class TimesheetServiceImpl implements TimesheetService {
                         "timesheet_days date " + date + " is outside pay period " + start + " to " + end);
             }
         });
+    }
+
+    private void validateCurrentPayPeriod(LocalDate periodStartDate, LocalDate periodEndDate) {
+        LocalDate today = LocalDate.now();
+        if (today.isBefore(periodStartDate) || today.isAfter(periodEndDate)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Draft save is allowed only for the currently selected pay period");
+        }
     }
 
     private void rejectIfLockedByDeadline(LocalDate deadlineDate) {

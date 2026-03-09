@@ -49,6 +49,8 @@ public interface EamLookupService {
 
     WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId);
 
+    WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId);
+
     WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size);
 
     WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size);

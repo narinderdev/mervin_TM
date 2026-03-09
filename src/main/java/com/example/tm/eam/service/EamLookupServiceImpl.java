@@ -423,7 +423,68 @@ public class EamLookupServiceImpl implements EamLookupService {
                         .build(),
                 offset,
                 safeSize);
-        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId);
+        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId, false);
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return WorkOrderNumberListResponse.builder()
+                .workOrderNumbers(workOrderNumbers)
+                .favouriteWorkOrderNumbers(favouriteWorkOrderNumbers)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
+    }
+
+    @Override
+    public WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 100 : Math.min(size, 500);
+        int offset = safePage * safeSize;
+
+        if (!supportsCapexWorkOrderFilter()) {
+            return WorkOrderNumberListResponse.builder()
+                    .workOrderNumbers(List.of())
+                    .favouriteWorkOrderNumbers(List.of())
+                    .page(safePage)
+                    .size(safeSize)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+
+        long total = queryLong("""
+                SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.work_order_number)))
+                FROM work_orders wo
+                INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id
+                WHERE wo.deleted = 0
+                  AND wo.work_order_number IS NOT NULL
+                  AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                  AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')
+                """);
+        List<WorkOrderNumberOptionDto> workOrderNumbers = jdbcTemplate.query("""
+                SELECT x.id, x.work_order_number
+                FROM (
+                    SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+                    FROM work_orders wo
+                    INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id
+                    WHERE wo.deleted = 0
+                      AND wo.work_order_number IS NOT NULL
+                      AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                      AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')
+                    GROUP BY LTRIM(RTRIM(wo.work_order_number))
+                ) x
+                ORDER BY x.work_order_number ASC
+                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                """,
+                (rs, rowNum) -> WorkOrderNumberOptionDto.builder()
+                        .id(rs.getLong("id"))
+                        .workOrderNumber(rs.getString("work_order_number"))
+                        .build(),
+                offset,
+                safeSize);
+        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId, true);
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
@@ -627,8 +688,11 @@ public class EamLookupServiceImpl implements EamLookupService {
         return workOrder;
     }
 
-    private List<WorkOrderNumberOptionDto> getFavouriteWorkOrderNumbers(Long technicianId) {
+    private List<WorkOrderNumberOptionDto> getFavouriteWorkOrderNumbers(Long technicianId, boolean capexOnly) {
         if (technicianId == null) {
+            return List.of();
+        }
+        if (capexOnly && !supportsCapexWorkOrderFilter()) {
             return List.of();
         }
 
@@ -648,14 +712,18 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
 
         String placeholders = String.join(",", java.util.Collections.nCopies(workOrderIds.size(), "?"));
+        String capexJoin = capexOnly ? "INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id" : "";
+        String capexFilter = capexOnly ? "AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')" : "";
         String sql = """
                 SELECT wo.id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
                 FROM work_orders wo
+                %s
                 WHERE wo.deleted = 0
                   AND wo.id IN (%s)
                   AND wo.work_order_number IS NOT NULL
                   AND LTRIM(RTRIM(wo.work_order_number)) <> ''
-                """.formatted(placeholders);
+                  %s
+                """.formatted(capexJoin, placeholders, capexFilter);
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, workOrderIds.toArray());
 
         Map<Long, String> numberById = new HashMap<>();
@@ -679,6 +747,12 @@ public class EamLookupServiceImpl implements EamLookupService {
                         .workOrderNumber(numberById.get(id))
                         .build())
                 .toList();
+    }
+
+    private boolean supportsCapexWorkOrderFilter() {
+        return tableExists("work_order_types")
+                && columnExists("work_order_types", "cost_treatment")
+                && columnExists("work_orders", "work_order_type_id");
     }
 
     @Override

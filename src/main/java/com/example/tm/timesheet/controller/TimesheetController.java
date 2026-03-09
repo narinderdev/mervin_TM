@@ -5,9 +5,11 @@ import com.example.tm.timesheet.dto.TimesheetRecentEntryResponseDto;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.service.TimesheetService;
+import java.time.LocalDate;
 import java.util.List;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -35,6 +38,14 @@ public class TimesheetController {
             @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
         String actorRole = extractRoleFromAuthorizationHeader(authorizationHeader);
         return ResponseEntity.status(HttpStatus.CREATED).body(timesheetService.create(requestDto, actorRole));
+    }
+
+    @PostMapping("/drafts")
+    public TimesheetResponseDto saveDraft(
+            @Valid @RequestBody TimesheetRequestDto requestDto,
+            @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+        String actorRole = extractRoleFromAuthorizationHeader(authorizationHeader);
+        return timesheetService.saveDraft(requestDto, actorRole);
     }
 
     @GetMapping
@@ -59,6 +70,14 @@ public class TimesheetController {
     @GetMapping("/technicians/{technicianId}")
     public List<TimesheetResponseDto> getByTechnician(@PathVariable("technicianId") Long technicianId) {
         return timesheetService.getByTechnician(technicianId);
+    }
+
+    @GetMapping("/drafts/technicians/{technicianId}")
+    public TimesheetResponseDto getDraftByTechnicianAndPeriod(
+            @PathVariable("technicianId") Long technicianId,
+            @RequestParam("period_start_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodStartDate,
+            @RequestParam("period_end_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodEndDate) {
+        return timesheetService.getDraftByTechnicianAndPeriod(technicianId, periodStartDate, periodEndDate);
     }
 
     @GetMapping("/technicians/{technicianId}/recent-entry")

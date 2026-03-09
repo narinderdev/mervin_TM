@@ -37,6 +37,20 @@ public class EamLookupController {
                 eamLookupService.getWorkOrderNumbers(page, size, technicianId)));
     }
 
+    @GetMapping("/work-orders/numbers/capex")
+    public ResponseEntity<ApiResponse<?>> getCapexWorkOrderNumbers(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "100") int size,
+            @RequestParam(value = "technicianId", required = false) Long technicianId,
+            HttpServletRequest request) {
+        log.info("EAM GET /work-orders/numbers/capex page={} size={} technicianId={} cid={}",
+                page, size, technicianId, correlationId(request));
+        return ResponseEntity.ok(ApiResponse.successResponse(
+                HttpStatus.OK.value(),
+                "CAPEX work order numbers fetched successfully",
+                eamLookupService.getCapexWorkOrderNumbers(page, size, technicianId)));
+    }
+
     @GetMapping("/work-orders/gl-accounts")
     public ResponseEntity<ApiResponse<?>> getWorkOrderGlAccounts(
             @RequestParam(value = "page", defaultValue = "0") int page,

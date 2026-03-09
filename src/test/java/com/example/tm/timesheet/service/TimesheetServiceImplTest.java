@@ -12,7 +12,9 @@ import com.example.tm.timesheet.dto.TimesheetDayRequestDto;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.dto.TimesheetRowRequestDto;
+import com.example.tm.timesheet.entity.TimesheetDraft;
 import com.example.tm.timesheet.entity.Timesheet;
+import com.example.tm.timesheet.repo.TimesheetDraftRepository;
 import com.example.tm.timesheet.repo.TimesheetRepository;
 import com.example.tm.timesheet.repo.TimesheetRowRepository;
 import java.math.BigDecimal;
@@ -35,6 +37,9 @@ class TimesheetServiceImplTest {
 
     @Mock
     private TimesheetRepository timesheetRepository;
+
+    @Mock
+    private TimesheetDraftRepository timesheetDraftRepository;
 
     @Mock
     private TimesheetRowRepository timesheetRowRepository;
@@ -105,6 +110,46 @@ class TimesheetServiceImplTest {
 
         assertEquals(HttpStatus.LOCKED, ex.getStatusCode());
         assertTrue(ex.getReason().contains("Pay period is locked"));
+    }
+
+    @Test
+    void saveDraftUpsertsCurrentPeriodAndMarksStatusDraft() {
+        LocalDate start = LocalDate.now().minusDays(2);
+        LocalDate end = LocalDate.now().plusDays(4);
+        TimesheetRequestDto request = buildRequest(start, end, "weekly");
+
+        when(timesheetDraftRepository.findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
+                request.getTechnicianId(),
+                request.getPeriodStartDate(),
+                request.getPeriodEndDate())).thenReturn(Optional.empty());
+        when(timesheetDraftRepository.save(any(TimesheetDraft.class))).thenAnswer(invocation -> {
+            TimesheetDraft saved = invocation.getArgument(0);
+            saved.setId(501L);
+            return saved;
+        });
+        when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
+
+        TimesheetResponseDto response = timesheetService.saveDraft(request, "TECHNICIAN");
+
+        assertEquals(501L, response.getId());
+        assertEquals("DRAFT", response.getStatus());
+        assertEquals("WEEKLY", response.getViewType());
+        assertEquals(request.getPeriodStartDate(), response.getPeriodStartDate());
+        assertEquals(request.getPeriodEndDate(), response.getPeriodEndDate());
+    }
+
+    @Test
+    void saveDraftRejectsWhenPeriodIsNotCurrent() {
+        LocalDate start = LocalDate.now().plusDays(7);
+        LocalDate end = start.plusDays(6);
+        TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> timesheetService.saveDraft(request, "TECHNICIAN"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("currently selected pay period"));
     }
 
     private TimesheetRequestDto buildRequest(LocalDate start, LocalDate end, String viewType) {
