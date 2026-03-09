@@ -5,16 +5,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TimesheetRowRequestDto {
 
-    @NotBlank
     @JsonProperty("pay_code")
     private String payCode;
 
-    @NotNull
     @DecimalMin(value = "0.0", inclusive = true)
     @JsonProperty("hours")
     private BigDecimal hours;
@@ -33,7 +30,17 @@ public class TimesheetRowRequestDto {
     @JsonProperty("comment")
     private String comment;
 
-    @NotNull
+    @JsonProperty("entry_type")
+    private String entryType;
+
+    @JsonProperty("expense_code")
+    private String expenseCode;
+
+    @DecimalMin(value = "0.0", inclusive = true)
+    @JsonProperty("expense_amount")
+    private BigDecimal expenseAmount;
+
+    @jakarta.validation.constraints.NotNull
     @JsonProperty("is_deleted")
     private Boolean isDeleted;
 
@@ -83,6 +90,30 @@ public class TimesheetRowRequestDto {
 
     public void setComment(String comment) {
         this.comment = comment;
+    }
+
+    public String getEntryType() {
+        return entryType;
+    }
+
+    public void setEntryType(String entryType) {
+        this.entryType = entryType;
+    }
+
+    public String getExpenseCode() {
+        return expenseCode;
+    }
+
+    public void setExpenseCode(String expenseCode) {
+        this.expenseCode = expenseCode;
+    }
+
+    public BigDecimal getExpenseAmount() {
+        return expenseAmount;
+    }
+
+    public void setExpenseAmount(BigDecimal expenseAmount) {
+        this.expenseAmount = expenseAmount;
     }
 
     public Boolean getIsDeleted() {

@@ -38,6 +38,11 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional(transactionManager = "tmTransactionManager")
 public class TimesheetServiceImpl implements TimesheetService {
 
+    private static final String STATUS_PENDING = "PENDING";
+    private static final String STATUS_APPROVED = "APPROVED";
+    private static final String STATUS_SENT_BACK = "SENT_BACK";
+    private static final String ENTRY_TYPE_TIME = "TIME";
+    private static final String ENTRY_TYPE_EXPENSE = "EXPENSE";
     private static final String VIEW_TYPE_WEEKLY = "WEEKLY";
     private static final String VIEW_TYPE_BIWEEKLY = "BIWEEKLY";
     private static final String VIEW_TYPE_MONTHLY = "MONTHLY";
@@ -61,13 +66,14 @@ public class TimesheetServiceImpl implements TimesheetService {
         String normalizedViewType = normalizeViewType(requestDto.getViewType());
         validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
         validateDayDatesWithinPeriod(requestDto);
+        validateRows(requestDto);
         rejectIfLockedByDeadline(computeDeadlineDate(requestDto.getPeriodEndDate()));
         rejectDuplicatePeriod(requestDto.getTechnicianId(), requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), null);
 
         Timesheet entity = new Timesheet();
         populateEntity(requestDto, entity, normalizedViewType);
         applyPayPeriodDates(entity);
-        entity.setStatus("PENDING");
+        entity.setStatus(STATUS_PENDING);
 
         return toResponse(timesheetRepository.save(entity));
     }
@@ -78,6 +84,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         String normalizedViewType = normalizeViewType(requestDto.getViewType());
         validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
         validateDayDatesWithinPeriod(requestDto);
+        validateRows(requestDto);
         validateCurrentPayPeriod(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate());
 
         TimesheetDraft draft = timesheetDraftRepository
@@ -117,6 +124,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         String normalizedViewType = normalizeViewType(requestDto.getViewType());
         validatePeriodRange(requestDto.getPeriodStartDate(), requestDto.getPeriodEndDate(), normalizedViewType);
         validateDayDatesWithinPeriod(requestDto);
+        validateRows(requestDto);
 
         boolean periodChanged = !requestDto.getPeriodStartDate().equals(existing.getPeriodStartDate())
                 || !requestDto.getPeriodEndDate().equals(existing.getPeriodEndDate());
@@ -134,7 +142,21 @@ public class TimesheetServiceImpl implements TimesheetService {
     @Override
     public TimesheetResponseDto approve(Long id) {
         Timesheet existing = findByIdOrThrow(id);
-        existing.setStatus("APPROVED");
+        existing.setStatus(STATUS_APPROVED);
+        return toResponse(timesheetRepository.save(existing));
+    }
+
+    @Override
+    public TimesheetResponseDto sendBack(Long id, String actorRole) {
+        requireActorRole(actorRole);
+        if (!isAdminRole(actorRole)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only admin can send back timesheets");
+        }
+        Timesheet existing = findByIdOrThrow(id);
+        if (STATUS_APPROVED.equalsIgnoreCase(existing.getStatus())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Approved timesheet cannot be sent back");
+        }
+        existing.setStatus(STATUS_SENT_BACK);
         return toResponse(timesheetRepository.save(existing));
     }
 
@@ -245,7 +267,14 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setTotalNonWorked(requestDto.getTotalNonWorked());
         entity.setTotalPremium(requestDto.getTotalPremium());
         entity.setSaveAsTemplate(Boolean.TRUE.equals(requestDto.getSaveAsTemplate()));
-        entity.clearDays();
+        // For repeated draft saves, clear+flush old days before inserting replacements to
+        // avoid unique (timesheet_draft_id, date) conflicts.
+        if (entity.getId() != null && !entity.getTimesheetDays().isEmpty()) {
+            entity.clearDays();
+            timesheetDraftRepository.saveAndFlush(entity);
+        } else {
+            entity.clearDays();
+        }
         requestDto.getTimesheetDays().forEach(dayDto -> {
             TimesheetDraftDay day = toDraftDayEntity(dayDto);
             dayDto.getRows()
@@ -289,7 +318,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .totalWorked(entity.getTotalWorked())
                 .totalNonWorked(entity.getTotalNonWorked())
                 .totalPremium(entity.getTotalPremium())
-                .status(entity.getStatus() == null ? "PENDING" : entity.getStatus())
+                .status(entity.getStatus() == null ? STATUS_PENDING : entity.getStatus())
                 .saveAsTemplate(Boolean.TRUE.equals(entity.getSaveAsTemplate()))
                 .timesheetDays(days)
                 .build();
@@ -363,6 +392,9 @@ public class TimesheetServiceImpl implements TimesheetService {
         row.setFerc(rowDto.getFerc());
         row.setActivity(rowDto.getActivity());
         row.setComment(rowDto.getComment());
+        row.setEntryType(resolveEntryType(rowDto.getEntryType()));
+        row.setExpenseCode(rowDto.getExpenseCode());
+        row.setExpenseAmount(rowDto.getExpenseAmount());
         row.setIsDeleted(rowDto.getIsDeleted());
         return row;
     }
@@ -376,6 +408,9 @@ public class TimesheetServiceImpl implements TimesheetService {
         row.setFerc(rowDto.getFerc());
         row.setActivity(rowDto.getActivity());
         row.setComment(rowDto.getComment());
+        row.setEntryType(resolveEntryType(rowDto.getEntryType()));
+        row.setExpenseCode(rowDto.getExpenseCode());
+        row.setExpenseAmount(rowDto.getExpenseAmount());
         row.setIsDeleted(rowDto.getIsDeleted());
         return row;
     }
@@ -407,6 +442,9 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .ferc(row.getFerc())
                 .activity(row.getActivity())
                 .comment(row.getComment())
+                .entryType(row.getEntryType())
+                .expenseCode(row.getExpenseCode())
+                .expenseAmount(row.getExpenseAmount())
                 .isDeleted(row.getIsDeleted())
                 .build();
     }
@@ -420,6 +458,9 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .ferc(row.getFerc())
                 .activity(row.getActivity())
                 .comment(row.getComment())
+                .entryType(row.getEntryType())
+                .expenseCode(row.getExpenseCode())
+                .expenseAmount(row.getExpenseAmount())
                 .isDeleted(row.getIsDeleted())
                 .build();
     }
@@ -494,6 +535,49 @@ public class TimesheetServiceImpl implements TimesheetService {
                         "timesheet_days date " + date + " is outside pay period " + start + " to " + end);
             }
         });
+    }
+
+    private void validateRows(TimesheetRequestDto requestDto) {
+        requestDto.getTimesheetDays().forEach(day -> day.getRows().forEach(row -> {
+            String entryType = resolveEntryType(row.getEntryType());
+            row.setEntryType(entryType);
+
+            if (ENTRY_TYPE_TIME.equals(entryType)) {
+                String payCode = row.getPayCode() == null ? null : row.getPayCode().trim();
+                if (payCode == null || payCode.isEmpty()) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pay_code is required for TIME entries");
+                }
+                if (row.getHours() == null) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hours is required for TIME entries");
+                }
+                row.setPayCode(payCode);
+                row.setExpenseCode(null);
+                row.setExpenseAmount(null);
+                return;
+            }
+
+            String expenseCode = row.getExpenseCode() == null ? null : row.getExpenseCode().trim();
+            if (expenseCode == null || expenseCode.isEmpty()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expense_code is required for EXPENSE entries");
+            }
+            if (row.getExpenseAmount() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expense_amount is required for EXPENSE entries");
+            }
+            row.setExpenseCode(expenseCode);
+            row.setPayCode(null);
+            row.setHours(null);
+        }));
+    }
+
+    private String resolveEntryType(String entryType) {
+        if (entryType == null || entryType.isBlank()) {
+            return ENTRY_TYPE_TIME;
+        }
+        String normalized = entryType.trim().toUpperCase(Locale.ROOT);
+        if (!ENTRY_TYPE_TIME.equals(normalized) && !ENTRY_TYPE_EXPENSE.equals(normalized)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "entry_type must be TIME or EXPENSE");
+        }
+        return normalized;
     }
 
     private void validateTechnicianId(Long technicianId) {
@@ -572,5 +656,10 @@ public class TimesheetServiceImpl implements TimesheetService {
     private boolean isTechnicianRole(String actorRole) {
         String normalized = actorRole == null ? "" : actorRole.trim().toUpperCase();
         return normalized.equals("TECHNICIAN") || normalized.contains("TECHNICIAN");
+    }
+
+    private boolean isAdminRole(String actorRole) {
+        String normalized = actorRole == null ? "" : actorRole.trim().toUpperCase();
+        return normalized.equals("ADMIN") || normalized.contains("ADMIN");
     }
 }

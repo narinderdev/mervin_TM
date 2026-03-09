@@ -22,6 +22,8 @@ public interface TimesheetService {
 
     TimesheetResponseDto approve(Long id);
 
+    TimesheetResponseDto sendBack(Long id, String actorRole);
+
     List<TimesheetResponseDto> getByTechnician(Long technicianId);
 
     TimesheetResponseDto getDraftByTechnicianAndPeriod(Long technicianId, LocalDate periodStartDate, LocalDate periodEndDate);

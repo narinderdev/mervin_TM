@@ -93,6 +93,14 @@ public class TimesheetController {
         return timesheetService.approve(id);
     }
 
+    @PostMapping("/{id}/send-back")
+    public TimesheetResponseDto sendBack(
+            @PathVariable Long id,
+            @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+        String actorRole = extractRoleFromAuthorizationHeader(authorizationHeader);
+        return timesheetService.sendBack(id, actorRole);
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @PathVariable Long id,

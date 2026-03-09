@@ -13,6 +13,7 @@ import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.dto.TimesheetRowRequestDto;
 import com.example.tm.timesheet.entity.TimesheetDraft;
+import com.example.tm.timesheet.entity.TimesheetDraftDay;
 import com.example.tm.timesheet.entity.Timesheet;
 import com.example.tm.timesheet.repo.TimesheetDraftRepository;
 import com.example.tm.timesheet.repo.TimesheetRepository;
@@ -152,6 +153,144 @@ class TimesheetServiceImplTest {
         assertTrue(ex.getReason().contains("currently selected pay period"));
     }
 
+    @Test
+    void saveDraftRejectsExpenseEntryWithoutExpenseCode() {
+        LocalDate start = LocalDate.now().minusDays(2);
+        LocalDate end = LocalDate.now().plusDays(4);
+        TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
+
+        TimesheetRowRequestDto row = request.getTimesheetDays().get(0).getRows().get(0);
+        row.setEntryType("EXPENSE");
+        row.setPayCode(null);
+        row.setHours(null);
+        row.setExpenseCode(null);
+        row.setExpenseAmount(new BigDecimal("100.00"));
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> timesheetService.saveDraft(request));
+
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("expense_code"));
+    }
+
+    @Test
+    void saveDraftExpenseEntryClearsPayCodeAndHours() {
+        LocalDate start = LocalDate.now().minusDays(2);
+        LocalDate end = LocalDate.now().plusDays(4);
+        TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
+
+        TimesheetRowRequestDto row = request.getTimesheetDays().get(0).getRows().get(0);
+        row.setEntryType("EXPENSE");
+        row.setPayCode("PTO");
+        row.setHours(new BigDecimal("12.0"));
+        row.setExpenseCode("MEAL");
+        row.setExpenseAmount(new BigDecimal("345.00"));
+
+        when(timesheetDraftRepository.findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
+                request.getTechnicianId(),
+                request.getPeriodStartDate(),
+                request.getPeriodEndDate())).thenReturn(Optional.empty());
+        when(timesheetDraftRepository.save(any(TimesheetDraft.class))).thenAnswer(invocation -> {
+            TimesheetDraft saved = invocation.getArgument(0);
+            saved.setId(501L);
+            return saved;
+        });
+        when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
+
+        TimesheetResponseDto response = timesheetService.saveDraft(request);
+        assertEquals("EXPENSE", response.getTimesheetDays().get(0).getRows().get(0).getEntryType());
+        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getPayCode());
+        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getHours());
+        assertEquals("MEAL", response.getTimesheetDays().get(0).getRows().get(0).getExpenseCode());
+    }
+
+    @Test
+    void saveDraftTimeEntryClearsExpenseFields() {
+        LocalDate start = LocalDate.now().minusDays(2);
+        LocalDate end = LocalDate.now().plusDays(4);
+        TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
+
+        TimesheetRowRequestDto row = request.getTimesheetDays().get(0).getRows().get(0);
+        row.setEntryType("TIME");
+        row.setPayCode("REG");
+        row.setHours(new BigDecimal("8.0"));
+        row.setExpenseCode("MEAL");
+        row.setExpenseAmount(new BigDecimal("200.00"));
+
+        when(timesheetDraftRepository.findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
+                request.getTechnicianId(),
+                request.getPeriodStartDate(),
+                request.getPeriodEndDate())).thenReturn(Optional.empty());
+        when(timesheetDraftRepository.save(any(TimesheetDraft.class))).thenAnswer(invocation -> {
+            TimesheetDraft saved = invocation.getArgument(0);
+            saved.setId(502L);
+            return saved;
+        });
+        when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
+
+        TimesheetResponseDto response = timesheetService.saveDraft(request);
+        assertEquals("TIME", response.getTimesheetDays().get(0).getRows().get(0).getEntryType());
+        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getExpenseCode());
+        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getExpenseAmount());
+    }
+
+    @Test
+    void saveDraftExistingDraftClearsAndFlushesDaysBeforeInsert() {
+        LocalDate start = LocalDate.now().minusDays(2);
+        LocalDate end = LocalDate.now().plusDays(4);
+        TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
+
+        TimesheetDraft existing = new TimesheetDraft();
+        existing.setId(1L);
+        existing.setTechnicianId(1L);
+        existing.setPeriodStartDate(start);
+        existing.setPeriodEndDate(end);
+        TimesheetDraftDay existingDay = new TimesheetDraftDay();
+        existingDay.setDate(start);
+        existing.addDay(existingDay);
+
+        when(timesheetDraftRepository.findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
+                request.getTechnicianId(),
+                request.getPeriodStartDate(),
+                request.getPeriodEndDate())).thenReturn(Optional.of(existing));
+        when(timesheetDraftRepository.saveAndFlush(any(TimesheetDraft.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(timesheetDraftRepository.save(any(TimesheetDraft.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
+
+        timesheetService.saveDraft(request);
+
+        verify(timesheetDraftRepository).saveAndFlush(existing);
+    }
+
+    @Test
+    void sendBackByAdminSetsStatusSentBack() {
+        Timesheet timesheet = new Timesheet();
+        timesheet.setId(10L);
+        timesheet.setStatus("PENDING");
+        timesheet.setPeriodStartDate(LocalDate.of(2026, 3, 1));
+        timesheet.setPeriodEndDate(LocalDate.of(2026, 3, 7));
+        timesheet.setTechnicianId(1L);
+
+        when(timesheetRepository.findById(10L)).thenReturn(Optional.of(timesheet));
+        when(timesheetRepository.save(any(Timesheet.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(tmUserRepository.findById(1L)).thenReturn(Optional.empty());
+
+        TimesheetResponseDto response = timesheetService.sendBack(10L, "ADMIN");
+
+        assertEquals("SENT_BACK", response.getStatus());
+    }
+
+    @Test
+    void sendBackByTechnicianIsForbidden() {
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> timesheetService.sendBack(10L, "TECHNICIAN"));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("Only admin"));
+    }
+
     private TimesheetRequestDto buildRequest(LocalDate start, LocalDate end, String viewType) {
         TimesheetRowRequestDto row = new TimesheetRowRequestDto();
         row.setPayCode("REG");
@@ -160,6 +299,7 @@ class TimesheetServiceImplTest {
         row.setFerc("FERC");
         row.setActivity("Activity");
         row.setComment("Comment");
+        row.setEntryType("TIME");
         row.setIsDeleted(false);
 
         TimesheetDayRequestDto day = new TimesheetDayRequestDto();

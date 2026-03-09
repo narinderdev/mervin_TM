@@ -41,6 +41,15 @@ public class TimesheetRow {
     @Column(length = 2000)
     private String comment;
 
+    @Column(name = "entry_type", length = 20)
+    private String entryType;
+
+    @Column(name = "expense_code", length = 100)
+    private String expenseCode;
+
+    @Column(name = "expense_amount", precision = 12, scale = 2)
+    private BigDecimal expenseAmount;
+
     @Column(name = "is_deleted")
     private Boolean isDeleted;
 
