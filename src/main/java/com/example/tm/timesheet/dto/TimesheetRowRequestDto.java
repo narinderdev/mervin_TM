@@ -30,15 +30,14 @@ public class TimesheetRowRequestDto {
     @JsonProperty("comment")
     private String comment;
 
-    @JsonProperty("entry_type")
-    private String entryType;
+    @JsonProperty("work_order_type")
+    private String workOrderType;
 
     @JsonProperty("expense_code")
     private String expenseCode;
 
-    @DecimalMin(value = "0.0", inclusive = true)
-    @JsonProperty("expense_amount")
-    private BigDecimal expenseAmount;
+    @JsonProperty("company_number")
+    private String companyNumber;
 
     @jakarta.validation.constraints.NotNull
     @JsonProperty("is_deleted")
@@ -92,12 +91,12 @@ public class TimesheetRowRequestDto {
         this.comment = comment;
     }
 
-    public String getEntryType() {
-        return entryType;
+    public String getWorkOrderType() {
+        return workOrderType;
     }
 
-    public void setEntryType(String entryType) {
-        this.entryType = entryType;
+    public void setWorkOrderType(String workOrderType) {
+        this.workOrderType = workOrderType;
     }
 
     public String getExpenseCode() {
@@ -108,12 +107,12 @@ public class TimesheetRowRequestDto {
         this.expenseCode = expenseCode;
     }
 
-    public BigDecimal getExpenseAmount() {
-        return expenseAmount;
+    public String getCompanyNumber() {
+        return companyNumber;
     }
 
-    public void setExpenseAmount(BigDecimal expenseAmount) {
-        this.expenseAmount = expenseAmount;
+    public void setCompanyNumber(String companyNumber) {
+        this.companyNumber = companyNumber;
     }
 
     public Boolean getIsDeleted() {

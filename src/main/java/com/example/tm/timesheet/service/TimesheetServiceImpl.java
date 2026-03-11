@@ -41,8 +41,6 @@ public class TimesheetServiceImpl implements TimesheetService {
     private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_APPROVED = "APPROVED";
     private static final String STATUS_SENT_BACK = "SENT_BACK";
-    private static final String ENTRY_TYPE_TIME = "TIME";
-    private static final String ENTRY_TYPE_EXPENSE = "EXPENSE";
     private static final String VIEW_TYPE_WEEKLY = "WEEKLY";
     private static final String VIEW_TYPE_BIWEEKLY = "BIWEEKLY";
     private static final String VIEW_TYPE_MONTHLY = "MONTHLY";
@@ -392,9 +390,9 @@ public class TimesheetServiceImpl implements TimesheetService {
         row.setFerc(rowDto.getFerc());
         row.setActivity(rowDto.getActivity());
         row.setComment(rowDto.getComment());
-        row.setEntryType(resolveEntryType(rowDto.getEntryType()));
+        row.setWorkOrderType(rowDto.getWorkOrderType());
         row.setExpenseCode(rowDto.getExpenseCode());
-        row.setExpenseAmount(rowDto.getExpenseAmount());
+        row.setCompanyNumber(rowDto.getCompanyNumber());
         row.setIsDeleted(rowDto.getIsDeleted());
         return row;
     }
@@ -408,9 +406,9 @@ public class TimesheetServiceImpl implements TimesheetService {
         row.setFerc(rowDto.getFerc());
         row.setActivity(rowDto.getActivity());
         row.setComment(rowDto.getComment());
-        row.setEntryType(resolveEntryType(rowDto.getEntryType()));
+        row.setWorkOrderType(rowDto.getWorkOrderType());
         row.setExpenseCode(rowDto.getExpenseCode());
-        row.setExpenseAmount(rowDto.getExpenseAmount());
+        row.setCompanyNumber(rowDto.getCompanyNumber());
         row.setIsDeleted(rowDto.getIsDeleted());
         return row;
     }
@@ -442,9 +440,9 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .ferc(row.getFerc())
                 .activity(row.getActivity())
                 .comment(row.getComment())
-                .entryType(row.getEntryType())
+                .workOrderType(row.getWorkOrderType())
                 .expenseCode(row.getExpenseCode())
-                .expenseAmount(row.getExpenseAmount())
+                .companyNumber(row.getCompanyNumber())
                 .isDeleted(row.getIsDeleted())
                 .build();
     }
@@ -458,9 +456,9 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .ferc(row.getFerc())
                 .activity(row.getActivity())
                 .comment(row.getComment())
-                .entryType(row.getEntryType())
+                .workOrderType(row.getWorkOrderType())
                 .expenseCode(row.getExpenseCode())
-                .expenseAmount(row.getExpenseAmount())
+                .companyNumber(row.getCompanyNumber())
                 .isDeleted(row.getIsDeleted())
                 .build();
     }
@@ -539,45 +537,11 @@ public class TimesheetServiceImpl implements TimesheetService {
 
     private void validateRows(TimesheetRequestDto requestDto) {
         requestDto.getTimesheetDays().forEach(day -> day.getRows().forEach(row -> {
-            String entryType = resolveEntryType(row.getEntryType());
-            row.setEntryType(entryType);
-
-            if (ENTRY_TYPE_TIME.equals(entryType)) {
-                String payCode = row.getPayCode() == null ? null : row.getPayCode().trim();
-                if (payCode == null || payCode.isEmpty()) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "pay_code is required for TIME entries");
-                }
-                if (row.getHours() == null) {
-                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "hours is required for TIME entries");
-                }
-                row.setPayCode(payCode);
-                row.setExpenseCode(null);
-                row.setExpenseAmount(null);
-                return;
-            }
-
-            String expenseCode = row.getExpenseCode() == null ? null : row.getExpenseCode().trim();
-            if (expenseCode == null || expenseCode.isEmpty()) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expense_code is required for EXPENSE entries");
-            }
-            if (row.getExpenseAmount() == null) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "expense_amount is required for EXPENSE entries");
-            }
-            row.setExpenseCode(expenseCode);
-            row.setPayCode(null);
-            row.setHours(null);
+            row.setPayCode(trimToNull(row.getPayCode()));
+            row.setExpenseCode(trimToNull(row.getExpenseCode()));
+            row.setWorkOrderType(trimToNull(row.getWorkOrderType()));
+            row.setCompanyNumber(trimToNull(row.getCompanyNumber()));
         }));
-    }
-
-    private String resolveEntryType(String entryType) {
-        if (entryType == null || entryType.isBlank()) {
-            return ENTRY_TYPE_TIME;
-        }
-        String normalized = entryType.trim().toUpperCase(Locale.ROOT);
-        if (!ENTRY_TYPE_TIME.equals(normalized) && !ENTRY_TYPE_EXPENSE.equals(normalized)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "entry_type must be TIME or EXPENSE");
-        }
-        return normalized;
     }
 
     private void validateTechnicianId(Long technicianId) {
@@ -645,6 +609,14 @@ public class TimesheetServiceImpl implements TimesheetService {
                     "view_type must be one of: WEEKLY, BIWEEKLY, MONTHLY");
         }
         return normalized;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private void requireActorRole(String actorRole) {

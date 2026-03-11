@@ -18,8 +18,8 @@ public class TimesheetRowResponseDto {
     private String ferc;
     private String activity;
     private String comment;
-    private String entryType;
+    private String workOrderType;
     private String expenseCode;
-    private BigDecimal expenseAmount;
+    private String companyNumber;
     private Boolean isDeleted;
 }

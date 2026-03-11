@@ -154,38 +154,17 @@ class TimesheetServiceImplTest {
     }
 
     @Test
-    void saveDraftRejectsExpenseEntryWithoutExpenseCode() {
+    void saveDraftAllowsMissingExpenseCodeWithoutEntryTypeValidation() {
         LocalDate start = LocalDate.now().minusDays(2);
         LocalDate end = LocalDate.now().plusDays(4);
         TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
 
         TimesheetRowRequestDto row = request.getTimesheetDays().get(0).getRows().get(0);
-        row.setEntryType("EXPENSE");
+        row.setWorkOrderType("CAPEX");
         row.setPayCode(null);
         row.setHours(null);
         row.setExpenseCode(null);
-        row.setExpenseAmount(new BigDecimal("100.00"));
-
-        ResponseStatusException ex = assertThrows(
-                ResponseStatusException.class,
-                () -> timesheetService.saveDraft(request));
-
-        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
-        assertTrue(ex.getReason().contains("expense_code"));
-    }
-
-    @Test
-    void saveDraftExpenseEntryClearsPayCodeAndHours() {
-        LocalDate start = LocalDate.now().minusDays(2);
-        LocalDate end = LocalDate.now().plusDays(4);
-        TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
-
-        TimesheetRowRequestDto row = request.getTimesheetDays().get(0).getRows().get(0);
-        row.setEntryType("EXPENSE");
-        row.setPayCode("PTO");
-        row.setHours(new BigDecimal("12.0"));
-        row.setExpenseCode("MEAL");
-        row.setExpenseAmount(new BigDecimal("345.00"));
+        row.setCompanyNumber("100200");
 
         when(timesheetDraftRepository.findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
                 request.getTechnicianId(),
@@ -199,24 +178,54 @@ class TimesheetServiceImplTest {
         when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
 
         TimesheetResponseDto response = timesheetService.saveDraft(request);
-        assertEquals("EXPENSE", response.getTimesheetDays().get(0).getRows().get(0).getEntryType());
-        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getPayCode());
-        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getHours());
-        assertEquals("MEAL", response.getTimesheetDays().get(0).getRows().get(0).getExpenseCode());
+        assertEquals("CAPEX", response.getTimesheetDays().get(0).getRows().get(0).getWorkOrderType());
+        assertEquals("100200", response.getTimesheetDays().get(0).getRows().get(0).getCompanyNumber());
     }
 
     @Test
-    void saveDraftTimeEntryClearsExpenseFields() {
+    void saveDraftTrimsWorkOrderTypeAndCompanyNumber() {
         LocalDate start = LocalDate.now().minusDays(2);
         LocalDate end = LocalDate.now().plusDays(4);
         TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
 
         TimesheetRowRequestDto row = request.getTimesheetDays().get(0).getRows().get(0);
-        row.setEntryType("TIME");
+        row.setWorkOrderType("  CAPEX  ");
+        row.setPayCode("PTO");
+        row.setHours(new BigDecimal("12.0"));
+        row.setExpenseCode("MEAL");
+        row.setCompanyNumber("  34500  ");
+
+        when(timesheetDraftRepository.findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
+                request.getTechnicianId(),
+                request.getPeriodStartDate(),
+                request.getPeriodEndDate())).thenReturn(Optional.empty());
+        when(timesheetDraftRepository.save(any(TimesheetDraft.class))).thenAnswer(invocation -> {
+            TimesheetDraft saved = invocation.getArgument(0);
+            saved.setId(501L);
+            return saved;
+        });
+        when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
+
+        TimesheetResponseDto response = timesheetService.saveDraft(request);
+        assertEquals("CAPEX", response.getTimesheetDays().get(0).getRows().get(0).getWorkOrderType());
+        assertEquals("34500", response.getTimesheetDays().get(0).getRows().get(0).getCompanyNumber());
+        assertEquals("PTO", response.getTimesheetDays().get(0).getRows().get(0).getPayCode());
+        assertEquals(new BigDecimal("12.0"), response.getTimesheetDays().get(0).getRows().get(0).getHours());
+        assertEquals("MEAL", response.getTimesheetDays().get(0).getRows().get(0).getExpenseCode());
+    }
+
+    @Test
+    void saveDraftAllowsNullWorkOrderType() {
+        LocalDate start = LocalDate.now().minusDays(2);
+        LocalDate end = LocalDate.now().plusDays(4);
+        TimesheetRequestDto request = buildRequest(start, end, "WEEKLY");
+
+        TimesheetRowRequestDto row = request.getTimesheetDays().get(0).getRows().get(0);
+        row.setWorkOrderType(null);
         row.setPayCode("REG");
         row.setHours(new BigDecimal("8.0"));
         row.setExpenseCode("MEAL");
-        row.setExpenseAmount(new BigDecimal("200.00"));
+        row.setCompanyNumber("20000");
 
         when(timesheetDraftRepository.findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(
                 request.getTechnicianId(),
@@ -230,9 +239,9 @@ class TimesheetServiceImplTest {
         when(tmUserRepository.findById(request.getTechnicianId())).thenReturn(Optional.empty());
 
         TimesheetResponseDto response = timesheetService.saveDraft(request);
-        assertEquals("TIME", response.getTimesheetDays().get(0).getRows().get(0).getEntryType());
-        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getExpenseCode());
-        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getExpenseAmount());
+        assertEquals(null, response.getTimesheetDays().get(0).getRows().get(0).getWorkOrderType());
+        assertEquals("MEAL", response.getTimesheetDays().get(0).getRows().get(0).getExpenseCode());
+        assertEquals("20000", response.getTimesheetDays().get(0).getRows().get(0).getCompanyNumber());
     }
 
     @Test
@@ -299,7 +308,8 @@ class TimesheetServiceImplTest {
         row.setFerc("FERC");
         row.setActivity("Activity");
         row.setComment("Comment");
-        row.setEntryType("TIME");
+        row.setWorkOrderType("TIME");
+        row.setCompanyNumber("1000");
         row.setIsDeleted(false);
 
         TimesheetDayRequestDto day = new TimesheetDayRequestDto();
