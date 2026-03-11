@@ -18,6 +18,7 @@ import com.example.tm.eam.dto.WorkOrderDetailsResponse;
 import com.example.tm.eam.dto.WorkOrderGlAccountListResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
 import com.example.tm.eam.dto.WorkOrderNumberListResponse;
+import com.example.tm.eam.dto.WorkOrderTypeListResponse;
 import com.example.tm.eam.dto.WorkRequestTypePropertyUnitListResponse;
 import java.util.List;
 
@@ -52,6 +53,8 @@ public interface EamLookupService {
     WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId);
 
     WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size);
+
+    WorkOrderTypeListResponse getWorkOrderTypes(int page, int size);
 
     WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size);
 

@@ -61,6 +61,18 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Work order GL accounts fetched successfully", eamLookupService.getWorkOrderGlAccounts(page, size)));
     }
 
+    @GetMapping("/work-orders/types")
+    public ResponseEntity<ApiResponse<?>> getWorkOrderTypes(
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "size", defaultValue = "100") int size,
+            HttpServletRequest request) {
+        log.info("EAM GET /work-orders/types page={} size={} cid={}", page, size, correlationId(request));
+        return ResponseEntity.ok(ApiResponse.successResponse(
+                HttpStatus.OK.value(),
+                "Work order types fetched successfully",
+                eamLookupService.getWorkOrderTypes(page, size)));
+    }
+
     @GetMapping("/work-request-types/property-units")
     public ResponseEntity<ApiResponse<?>> getWorkRequestTypePropertyUnits(
             @RequestParam(value = "page", defaultValue = "0") int page,

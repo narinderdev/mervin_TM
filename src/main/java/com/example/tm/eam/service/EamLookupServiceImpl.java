@@ -22,6 +22,7 @@ import com.example.tm.eam.dto.WorkOrderGlAccountListResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
 import com.example.tm.eam.dto.WorkOrderNumberListResponse;
 import com.example.tm.eam.dto.WorkOrderNumberOptionDto;
+import com.example.tm.eam.dto.WorkOrderTypeListResponse;
 import com.example.tm.eam.dto.WorkRequestTypePropertyUnitListResponse;
 import com.example.tm.shared.exception.ResourceNotFoundException;
 import java.sql.Timestamp;
@@ -529,6 +530,89 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .totalPages(totalPages)
                 .last(safePage >= Math.max(totalPages - 1, 0))
                 .build();
+    }
+
+    @Override
+    public WorkOrderTypeListResponse getWorkOrderTypes(int page, int size) {
+        int safePage = Math.max(page, 0);
+        int safeSize = size <= 0 ? 100 : Math.min(size, 500);
+        int offset = safePage * safeSize;
+
+        if (!tableExists("work_order_types")) {
+            return WorkOrderTypeListResponse.builder()
+                    .workOrderTypes(List.of())
+                    .page(safePage)
+                    .size(safeSize)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+
+        List<String> columns = resolveTableColumns("work_order_types");
+        if (columns.isEmpty()) {
+            return WorkOrderTypeListResponse.builder()
+                    .workOrderTypes(List.of())
+                    .page(safePage)
+                    .size(safeSize)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .last(true)
+                    .build();
+        }
+
+        String quotedTable = quoteIdentifier("work_order_types");
+        String selectedColumns = String.join(", ", columns.stream()
+                .map(this::quoteIdentifier)
+                .map(column -> "wot." + column)
+                .toList());
+        String orderColumn = resolvePreferredOrderColumn(columns);
+        String listSql = """
+                SELECT %s
+                FROM %s wot
+                ORDER BY wot.%s ASC
+                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                """.formatted(selectedColumns, quotedTable, quoteIdentifier(orderColumn));
+
+        long total = queryLong("SELECT COUNT(1) FROM " + quotedTable);
+        List<Map<String, Object>> workOrderTypes = jdbcTemplate.queryForList(listSql, offset, safeSize);
+
+        int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
+        return WorkOrderTypeListResponse.builder()
+                .workOrderTypes(workOrderTypes)
+                .page(safePage)
+                .size(safeSize)
+                .totalElements(total)
+                .totalPages(totalPages)
+                .last(safePage >= Math.max(totalPages - 1, 0))
+                .build();
+    }
+
+    private List<String> resolveTableColumns(String tableName) {
+        return jdbcTemplate.query("""
+                        SELECT c.COLUMN_NAME
+                        FROM INFORMATION_SCHEMA.COLUMNS c
+                        WHERE c.TABLE_NAME = ?
+                        ORDER BY c.ORDINAL_POSITION
+                        """,
+                (rs, rowNum) -> rs.getString("COLUMN_NAME"),
+                tableName);
+    }
+
+    private String resolvePreferredOrderColumn(List<String> columns) {
+        List<String> preferred = List.of("id", "work_order_type_id", "code", "name", "description");
+        for (String candidate : preferred) {
+            for (String column : columns) {
+                if (candidate.equalsIgnoreCase(column)) {
+                    return column;
+                }
+            }
+        }
+        return columns.get(0);
+    }
+
+    private String quoteIdentifier(String identifier) {
+        return "[" + identifier.replace("]", "]]") + "]";
     }
 
     @Override
