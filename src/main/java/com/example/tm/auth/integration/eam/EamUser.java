@@ -46,4 +46,7 @@ public class EamUser {
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private List<EamUserRole> userRoles = new ArrayList<>();
+
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    private List<EamUserCompany> userCompanies = new ArrayList<>();
 }

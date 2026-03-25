@@ -58,48 +58,101 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public TechnicianDashboardResponse getDashboardTechnicians(Integer limit) {
+    public TechnicianDashboardResponse getDashboardTechnicians(Integer limit, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int resolvedLimit = limit == null ? 5 : Math.max(1, Math.min(limit, 50));
         LocalDate today = LocalDate.now();
         LocalDateTime dayStart = today.atStartOfDay();
         LocalDateTime dayEnd = today.plusDays(1).atStartOfDay();
 
-        long totalTechnicians = queryLong("SELECT COUNT(1) FROM technicians WHERE is_deleted = 0");
-        boolean isHolidayToday = queryLong("SELECT COUNT(1) FROM technician_holidays WHERE holiday_date = ?", today) > 0;
-        long onLeave = queryLong("SELECT COUNT(DISTINCT technician_id) FROM technician_leaves WHERE start_date <= ? AND end_date >= ?", today, today);
-        long workOrders = queryLong("SELECT COUNT(1) FROM work_orders WHERE deleted = 0");
-        long busyCount = queryLong("""
-                SELECT COUNT(DISTINCT x.technician_id)
-                FROM (
-                    SELECT wo.assigned_technician_id AS technician_id
-                    FROM work_orders wo
-                    WHERE wo.deleted = 0
-                      AND wo.status IN ('SCHEDULED','IN_PROGRESS')
-                      AND wo.planned_start_datetime < ?
-                      AND wo.planned_end_datetime > ?
-                      AND wo.assigned_technician_id IS NOT NULL
-                    UNION
-                    SELECT tm.technician_id AS technician_id
-                    FROM work_orders wo
-                    INNER JOIN technician_team_members tm ON tm.team_id = wo.assigned_team_id
-                    WHERE wo.deleted = 0
-                      AND wo.status IN ('SCHEDULED','IN_PROGRESS')
-                      AND wo.planned_start_datetime < ?
-                      AND wo.planned_end_datetime > ?
-                      AND wo.assigned_team_id IS NOT NULL
-                ) x
-                """, dayEnd, dayStart, dayEnd, dayStart);
+        long totalTechnicians = queryLongTm("SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ?", safeCompanyId);
 
-        List<Map<String, Object>> recentRows = jdbcTemplate.queryForList("""
-                SELECT wo.work_order_id, wo.status, wo.updated_at,
-                       t.full_name AS technician_name, tt.team_name AS team_name
-                FROM work_orders wo
-                LEFT JOIN technicians t ON t.id = wo.assigned_technician_id
-                LEFT JOIN technician_teams tt ON tt.id = wo.assigned_team_id
-                WHERE wo.deleted = 0
-                ORDER BY wo.updated_at DESC, wo.id DESC
-                OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
-                """, resolvedLimit);
+        boolean companyScopedHolidays = hasCompanyIdColumn("technician_holidays");
+        boolean isHolidayToday = (companyScopedHolidays
+                ? queryLong("SELECT COUNT(1) FROM technician_holidays WHERE holiday_date = ? AND company_id = ?", today, safeCompanyId)
+                : queryLong("SELECT COUNT(1) FROM technician_holidays WHERE holiday_date = ?", today)) > 0;
+
+        boolean companyScopedLeaves = hasCompanyIdColumn("technician_leaves");
+        long onLeave = companyScopedLeaves
+                ? queryLong("SELECT COUNT(DISTINCT technician_id) FROM technician_leaves WHERE start_date <= ? AND end_date >= ? AND company_id = ?", today, today, safeCompanyId)
+                : queryLong("SELECT COUNT(DISTINCT technician_id) FROM technician_leaves WHERE start_date <= ? AND end_date >= ?", today, today);
+
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        long workOrders = companyScopedWorkOrders
+                ? queryLong("SELECT COUNT(1) FROM work_orders WHERE deleted = 0 AND company_id = ?", safeCompanyId)
+                : queryLong("SELECT COUNT(1) FROM work_orders WHERE deleted = 0");
+
+        String workOrderCompanyFilter = companyScopedWorkOrders ? " AND wo.company_id = ? " : "";
+        long busyCount = companyScopedWorkOrders
+                ? queryLong("""
+                    SELECT COUNT(DISTINCT x.technician_id)
+                    FROM (
+                        SELECT wo.assigned_technician_id AS technician_id
+                        FROM work_orders wo
+                        WHERE wo.deleted = 0
+                          AND wo.status IN ('SCHEDULED','IN_PROGRESS')
+                          AND wo.planned_start_datetime < ?
+                          AND wo.planned_end_datetime > ?
+                          AND wo.assigned_technician_id IS NOT NULL
+                          %s
+                        UNION
+                        SELECT tm.technician_id AS technician_id
+                        FROM work_orders wo
+                        INNER JOIN technician_team_members tm ON tm.team_id = wo.assigned_team_id
+                        WHERE wo.deleted = 0
+                          AND wo.status IN ('SCHEDULED','IN_PROGRESS')
+                          AND wo.planned_start_datetime < ?
+                          AND wo.planned_end_datetime > ?
+                          AND wo.assigned_team_id IS NOT NULL
+                          %s
+                    ) x
+                    """.formatted(workOrderCompanyFilter, workOrderCompanyFilter),
+                dayEnd, dayStart, safeCompanyId, dayEnd, dayStart, safeCompanyId)
+                : queryLong("""
+                    SELECT COUNT(DISTINCT x.technician_id)
+                    FROM (
+                        SELECT wo.assigned_technician_id AS technician_id
+                        FROM work_orders wo
+                        WHERE wo.deleted = 0
+                          AND wo.status IN ('SCHEDULED','IN_PROGRESS')
+                          AND wo.planned_start_datetime < ?
+                          AND wo.planned_end_datetime > ?
+                          AND wo.assigned_technician_id IS NOT NULL
+                        UNION
+                        SELECT tm.technician_id AS technician_id
+                        FROM work_orders wo
+                        INNER JOIN technician_team_members tm ON tm.team_id = wo.assigned_team_id
+                        WHERE wo.deleted = 0
+                          AND wo.status IN ('SCHEDULED','IN_PROGRESS')
+                          AND wo.planned_start_datetime < ?
+                          AND wo.planned_end_datetime > ?
+                          AND wo.assigned_team_id IS NOT NULL
+                    ) x
+                    """, dayEnd, dayStart, dayEnd, dayStart);
+
+        List<Map<String, Object>> recentRows = companyScopedWorkOrders
+                ? jdbcTemplate.queryForList("""
+                    SELECT wo.work_order_id, wo.status, wo.updated_at,
+                           t.full_name AS technician_name, tt.team_name AS team_name
+                    FROM work_orders wo
+                    LEFT JOIN technicians t ON t.id = wo.assigned_technician_id
+                    LEFT JOIN technician_teams tt ON tt.id = wo.assigned_team_id
+                    WHERE wo.deleted = 0
+                      AND wo.company_id = ?
+                    ORDER BY wo.updated_at DESC, wo.id DESC
+                    OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+                    """, safeCompanyId, resolvedLimit)
+                : jdbcTemplate.queryForList("""
+                    SELECT wo.work_order_id, wo.status, wo.updated_at,
+                           t.full_name AS technician_name, tt.team_name AS team_name
+                    FROM work_orders wo
+                    LEFT JOIN technicians t ON t.id = wo.assigned_technician_id
+                    LEFT JOIN technician_teams tt ON tt.id = wo.assigned_team_id
+                    WHERE wo.deleted = 0
+                    ORDER BY wo.updated_at DESC, wo.id DESC
+                    OFFSET 0 ROWS FETCH NEXT ? ROWS ONLY
+                    """, resolvedLimit);
 
         List<TechnicianActivityDto> activities = recentRows.stream().map(this::mapActivity).toList();
         long availableToday = isHolidayToday ? 0 : Math.max(totalTechnicians - busyCount - onLeave, 0);
@@ -115,14 +168,16 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     @Override
     public TechnicianDetailsResponse createTechnician(TechnicianCreateRequest request) {
+        Long companyId = requireCompanyId(request.getCompanyId());
+        ensureCompanyExistsInEam(companyId);
         String firstName = requireNonBlank(request.getFirstName(), "First name is required");
         String lastName = requireNonBlank(request.getLastName(), "Last name is required");
-        String badgeNumber = requireBadgeUniqueTm(request.getBadgeNumber(), null);
-        String technicianId = determineTechnicianIdTm(request.getTechnicianId(), null);
+        String badgeNumber = requireBadgeUniqueTm(request.getBadgeNumber(), null, companyId);
+        String technicianId = determineTechnicianIdTm(request.getTechnicianId(), null, companyId);
         String technicianType = normalizeUpperDefault(request.getTechnicianType(), "FULL_TIME");
         String status = normalizeUpperDefault(request.getStatus(), "ACTIVE");
         String email = safeTrim(request.getEmail());
-        if (email != null && existsEmailForOtherTechnicianTm(email, null)) {
+        if (email != null && existsEmailForOtherTechnicianTm(email, null, companyId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician with the same email already exists");
         }
 
@@ -131,16 +186,17 @@ public class EamLookupServiceImpl implements EamLookupService {
 
         Long technicianPk = tmJdbcTemplate.queryForObject("""
                 INSERT INTO technicians (
-                    technician_id, badge_number, first_name, last_name, full_name,
+                    company_id, technician_id, badge_number, first_name, last_name, full_name,
                     technician_type, skills, phone_number, email, address, status,
                     hire_date, work_shift, technician_photo_url, certificate_url,
                     certificate_issue_date, certificate_expiry_date, termination_date,
                     certifications, notes, is_deleted
                 )
                 OUTPUT INSERTED.id
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
                 """,
                 Long.class,
+                companyId,
                 technicianId,
                 badgeNumber,
                 firstName,
@@ -164,18 +220,22 @@ public class EamLookupServiceImpl implements EamLookupService {
         if (technicianPk == null || technicianPk <= 0) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create technician");
         }
-        return getTechnicianById(technicianPk);
+        return getTechnicianById(technicianPk, companyId);
     }
 
     @Override
-    public TechnicianDetailsResponse getTechnicianById(Long technicianId) {
-        Map<String, Object> row = getTechnicianRowOrThrowTm(technicianId);
-        return mapTechnicianTm(row);
+    public TechnicianDetailsResponse getTechnicianById(Long technicianId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        Map<String, Object> row = getTechnicianRowOrThrowTm(technicianId, safeCompanyId);
+        return mapTechnicianTm(row, safeCompanyId);
     }
 
     @Override
-    public TechnicianDetailsResponse patchTechnician(Long technicianId, TechnicianPatchRequest request) {
-        Map<String, Object> current = getTechnicianRowOrThrowTm(technicianId);
+    public TechnicianDetailsResponse patchTechnician(Long technicianId, Long companyId, TechnicianPatchRequest request) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        Map<String, Object> current = getTechnicianRowOrThrowTm(technicianId, safeCompanyId);
 
         String firstName = request.getFirstName() == null
                 ? asString(current.get("first_name"))
@@ -186,14 +246,14 @@ public class EamLookupServiceImpl implements EamLookupService {
 
         String badgeNumber = request.getBadgeNumber() == null
                 ? asString(current.get("badge_number"))
-                : requireBadgeUniqueTm(request.getBadgeNumber(), technicianId);
+                : requireBadgeUniqueTm(request.getBadgeNumber(), technicianId, safeCompanyId);
 
         String resolvedTechnicianId;
         if (request.getTechnicianId() == null) {
             resolvedTechnicianId = asString(current.get("technician_id"));
         } else {
             String trimmed = requireNonBlank(request.getTechnicianId(), "technicianId cannot be blank");
-            ensureTechnicianIdUniqueTm(trimmed, technicianId);
+            ensureTechnicianIdUniqueTm(trimmed, technicianId, safeCompanyId);
             resolvedTechnicianId = trimmed;
         }
 
@@ -209,7 +269,7 @@ public class EamLookupServiceImpl implements EamLookupService {
             email = asString(current.get("email"));
         } else {
             email = safeTrim(request.getEmail());
-            if (email != null && existsEmailForOtherTechnicianTm(email, technicianId)) {
+            if (email != null && existsEmailForOtherTechnicianTm(email, technicianId, safeCompanyId)) {
                 throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician with the same email already exists");
             }
         }
@@ -226,7 +286,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                     hire_date = ?, work_shift = ?, technician_photo_url = ?, certificate_url = ?,
                     certificate_issue_date = ?, certificate_expiry_date = ?, termination_date = ?,
                     certifications = ?, notes = ?
-                WHERE id = ? AND is_deleted = 0
+                WHERE id = ? AND company_id = ? AND is_deleted = 0
                 """,
                 resolvedTechnicianId,
                 badgeNumber,
@@ -248,38 +308,43 @@ public class EamLookupServiceImpl implements EamLookupService {
                 terminationDate,
                 request.getCertifications() == null ? asString(current.get("certifications")) : request.getCertifications(),
                 request.getNotes() == null ? asString(current.get("notes")) : request.getNotes(),
-                technicianId);
+                technicianId,
+                safeCompanyId);
 
-        return getTechnicianById(technicianId);
+        return getTechnicianById(technicianId, safeCompanyId);
     }
 
     @Override
-    public void deleteTechnician(Long technicianId) {
-        ensureTechnicianExistsTm(technicianId);
+    public void deleteTechnician(Long technicianId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        ensureTechnicianExistsTm(technicianId, safeCompanyId);
         tmJdbcTemplate.update("DELETE FROM technician_team_members WHERE technician_id = ?", technicianId);
-        tmJdbcTemplate.update("UPDATE technicians SET is_deleted = 1 WHERE id = ?", technicianId);
+        tmJdbcTemplate.update("UPDATE technicians SET is_deleted = 1 WHERE id = ? AND company_id = ?", technicianId, safeCompanyId);
     }
 
     @Override
-    public TechnicianListResponse getTechnicians(int page, int size) {
+    public TechnicianListResponse getTechnicians(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
 
-        long total = queryLongTm("SELECT COUNT(1) FROM technicians WHERE is_deleted = 0");
+        long total = queryLongTm("SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ?", safeCompanyId);
         List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
-                SELECT id, technician_id, badge_number, first_name, last_name, full_name,
+                SELECT id, company_id, technician_id, badge_number, first_name, last_name, full_name,
                        technician_type, skills, phone_number, email, address, status,
                        hire_date, work_shift, technician_photo_url, certificate_url,
                        certificate_issue_date, certificate_expiry_date, termination_date,
                        certifications, notes
                 FROM technicians
-                WHERE is_deleted = 0
+                WHERE is_deleted = 0 AND company_id = ?
                 ORDER BY id
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, offset, safeSize);
+                """, safeCompanyId, offset, safeSize);
 
-        List<TechnicianDetailsResponse> technicians = rows.stream().map(this::mapTechnicianTm).toList();
+        List<TechnicianDetailsResponse> technicians = rows.stream().map(row -> mapTechnicianTm(row, safeCompanyId)).toList();
         return TechnicianListResponse.builder()
                 .technicians(technicians)
                 .page(safePage)
@@ -291,25 +356,30 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days) {
-        ensureTechnicianExists(technicianId);
-        return buildAvailability(technicianId, days);
+    public List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        ensureTechnicianExistsTm(technicianId, safeCompanyId);
+        return buildAvailability(technicianId, days, safeCompanyId);
     }
 
     @Override
     public TechnicianTeamDetailsResponse createTechnicianTeam(TechnicianTeamCreateRequest request) {
+        Long companyId = requireCompanyId(request.getCompanyId());
+        ensureCompanyExistsInEam(companyId);
         String teamName = requireNonBlank(request.getTeamName(), "Team name is required");
-        ensureTeamNameUniqueTm(teamName, null);
+        ensureTeamNameUniqueTm(teamName, null, companyId);
         String status = normalizeUpperDefault(request.getStatus(), "ACTIVE");
 
         Long teamId = tmJdbcTemplate.queryForObject("""
                 INSERT INTO technician_teams (
-                    team_name, team_description, status, start_date, end_date, notes
+                    company_id, team_name, team_description, status, start_date, end_date, notes
                 )
                 OUTPUT INSERTED.id
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 Long.class,
+                companyId,
                 teamName,
                 request.getTeamDescription(),
                 status,
@@ -319,31 +389,35 @@ public class EamLookupServiceImpl implements EamLookupService {
         if (teamId == null || teamId <= 0) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create technician team");
         }
-        applyTeamMembershipTm(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
-        return getTechnicianTeamById(teamId);
+        applyTeamMembershipTm(teamId, companyId, request.getTechnicianIds(), request.getTeamLeaderId());
+        return getTechnicianTeamById(teamId, companyId);
     }
 
     @Override
-    public TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId) {
-        Map<String, Object> row = getTeamRowOrThrowTm(teamId);
-        return mapTeamTm(row);
+    public TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        Map<String, Object> row = getTeamRowOrThrowTm(teamId, safeCompanyId);
+        return mapTeamTm(row, safeCompanyId);
     }
 
     @Override
-    public TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, TechnicianTeamPatchRequest request) {
-        Map<String, Object> current = getTeamRowOrThrowTm(teamId);
+    public TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, Long companyId, TechnicianTeamPatchRequest request) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        Map<String, Object> current = getTeamRowOrThrowTm(teamId, safeCompanyId);
 
         String teamName = request.getTeamName() == null
                 ? asString(current.get("team_name"))
                 : requireNonBlank(request.getTeamName(), "Team name cannot be blank");
         if (request.getTeamName() != null) {
-            ensureTeamNameUniqueTm(teamName, teamId);
+            ensureTeamNameUniqueTm(teamName, teamId, safeCompanyId);
         }
 
         tmJdbcTemplate.update("""
                 UPDATE technician_teams
                 SET team_name = ?, team_description = ?, status = ?, start_date = ?, end_date = ?, notes = ?
-                WHERE id = ?
+                WHERE id = ? AND company_id = ?
                 """,
                 teamName,
                 request.getTeamDescription() == null ? asString(current.get("team_description")) : request.getTeamDescription(),
@@ -351,36 +425,42 @@ public class EamLookupServiceImpl implements EamLookupService {
                 request.getStartDate() == null ? asLocalDate(current.get("start_date")) : request.getStartDate(),
                 request.getEndDate() == null ? asLocalDate(current.get("end_date")) : request.getEndDate(),
                 request.getNotes() == null ? asString(current.get("notes")) : request.getNotes(),
-                teamId);
+                teamId,
+                safeCompanyId);
 
-        applyTeamMembershipTm(teamId, request.getTechnicianIds(), request.getTeamLeaderId());
-        return getTechnicianTeamById(teamId);
+        applyTeamMembershipTm(teamId, safeCompanyId, request.getTechnicianIds(), request.getTeamLeaderId());
+        return getTechnicianTeamById(teamId, safeCompanyId);
     }
 
     @Override
-    public void deleteTechnicianTeam(Long teamId) {
-        getTeamRowOrThrowTm(teamId);
+    public void deleteTechnicianTeam(Long teamId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        getTeamRowOrThrowTm(teamId, safeCompanyId);
         long membersCount = queryLongTm("SELECT COUNT(1) FROM technician_team_members WHERE team_id = ?", teamId);
         if (membersCount > 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot delete team with assigned technicians");
         }
-        tmJdbcTemplate.update("DELETE FROM technician_teams WHERE id = ?", teamId);
+        tmJdbcTemplate.update("DELETE FROM technician_teams WHERE id = ? AND company_id = ?", teamId, safeCompanyId);
     }
 
     @Override
-    public TechnicianTeamListResponse getTechnicianTeams(int page, int size) {
+    public TechnicianTeamListResponse getTechnicianTeams(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
 
-        long total = queryLongTm("SELECT COUNT(1) FROM technician_teams");
+        long total = queryLongTm("SELECT COUNT(1) FROM technician_teams WHERE company_id = ?", safeCompanyId);
         List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
-                SELECT id, team_name, team_description, status, start_date, end_date, notes
+                SELECT id, company_id, team_name, team_description, status, start_date, end_date, notes
                 FROM technician_teams
+                WHERE company_id = ?
                 ORDER BY id
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, offset, safeSize);
-        List<TechnicianTeamDetailsResponse> teams = rows.stream().map(this::mapTeamTm).toList();
+                """, safeCompanyId, offset, safeSize);
+        List<TechnicianTeamDetailsResponse> teams = rows.stream().map(row -> mapTeamTm(row, safeCompanyId)).toList();
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return TechnicianTeamListResponse.builder()
                 .teams(teams)
@@ -393,38 +473,75 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId) {
+    public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
 
-        long total = queryLong("""
-                SELECT COUNT(DISTINCT wo.work_order_number)
-                FROM work_orders wo
-                WHERE wo.deleted = 0
-                  AND wo.work_order_number IS NOT NULL
-                  AND LTRIM(RTRIM(wo.work_order_number)) <> ''
-                """);
-        List<WorkOrderNumberOptionDto> workOrderNumbers = jdbcTemplate.query("""
-                SELECT x.id, x.work_order_number
-                FROM (
-                    SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        String companyFilter = companyScopedWorkOrders ? " AND wo.company_id = ? " : "";
+        long total = companyScopedWorkOrders
+                ? queryLong("""
+                    SELECT COUNT(DISTINCT wo.work_order_number)
                     FROM work_orders wo
                     WHERE wo.deleted = 0
                       AND wo.work_order_number IS NOT NULL
                       AND LTRIM(RTRIM(wo.work_order_number)) <> ''
-                    GROUP BY LTRIM(RTRIM(wo.work_order_number))
-                ) x
-                ORDER BY x.work_order_number ASC
-                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """,
+                      %s
+                    """.formatted(companyFilter), safeCompanyId)
+                : queryLong("""
+                    SELECT COUNT(DISTINCT wo.work_order_number)
+                    FROM work_orders wo
+                    WHERE wo.deleted = 0
+                      AND wo.work_order_number IS NOT NULL
+                      AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                    """);
+
+        List<WorkOrderNumberOptionDto> workOrderNumbers = companyScopedWorkOrders
+                ? jdbcTemplate.query("""
+                    SELECT x.id, x.work_order_number
+                    FROM (
+                        SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+                        FROM work_orders wo
+                        WHERE wo.deleted = 0
+                          AND wo.work_order_number IS NOT NULL
+                          AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                          AND wo.company_id = ?
+                        GROUP BY LTRIM(RTRIM(wo.work_order_number))
+                    ) x
+                    ORDER BY x.work_order_number ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """,
+                (rs, rowNum) -> WorkOrderNumberOptionDto.builder()
+                        .id(rs.getLong("id"))
+                        .workOrderNumber(rs.getString("work_order_number"))
+                        .build(),
+                safeCompanyId,
+                offset,
+                safeSize)
+                : jdbcTemplate.query("""
+                    SELECT x.id, x.work_order_number
+                    FROM (
+                        SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+                        FROM work_orders wo
+                        WHERE wo.deleted = 0
+                          AND wo.work_order_number IS NOT NULL
+                          AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                        GROUP BY LTRIM(RTRIM(wo.work_order_number))
+                    ) x
+                    ORDER BY x.work_order_number ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """,
                 (rs, rowNum) -> WorkOrderNumberOptionDto.builder()
                         .id(rs.getLong("id"))
                         .workOrderNumber(rs.getString("work_order_number"))
                         .build(),
                 offset,
                 safeSize);
-        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId, false);
+
+        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId, false, safeCompanyId);
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
@@ -438,7 +555,9 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId) {
+    public WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -455,37 +574,76 @@ public class EamLookupServiceImpl implements EamLookupService {
                     .build();
         }
 
-        long total = queryLong("""
-                SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.work_order_number)))
-                FROM work_orders wo
-                INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id
-                WHERE wo.deleted = 0
-                  AND wo.work_order_number IS NOT NULL
-                  AND LTRIM(RTRIM(wo.work_order_number)) <> ''
-                  AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')
-                """);
-        List<WorkOrderNumberOptionDto> workOrderNumbers = jdbcTemplate.query("""
-                SELECT x.id, x.work_order_number
-                FROM (
-                    SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        String workOrderCompanyFilter = companyScopedWorkOrders ? " AND wo.company_id = ? " : "";
+        long total = companyScopedWorkOrders
+                ? queryLong("""
+                    SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.work_order_number)))
                     FROM work_orders wo
                     INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id
                     WHERE wo.deleted = 0
                       AND wo.work_order_number IS NOT NULL
                       AND LTRIM(RTRIM(wo.work_order_number)) <> ''
                       AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')
-                    GROUP BY LTRIM(RTRIM(wo.work_order_number))
-                ) x
-                ORDER BY x.work_order_number ASC
-                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """,
+                      %s
+                    """.formatted(workOrderCompanyFilter), safeCompanyId)
+                : queryLong("""
+                    SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.work_order_number)))
+                    FROM work_orders wo
+                    INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id
+                    WHERE wo.deleted = 0
+                      AND wo.work_order_number IS NOT NULL
+                      AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                      AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')
+                    """);
+
+        List<WorkOrderNumberOptionDto> workOrderNumbers = companyScopedWorkOrders
+                ? jdbcTemplate.query("""
+                    SELECT x.id, x.work_order_number
+                    FROM (
+                        SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+                        FROM work_orders wo
+                        INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id
+                        WHERE wo.deleted = 0
+                          AND wo.work_order_number IS NOT NULL
+                          AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                          AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')
+                          AND wo.company_id = ?
+                        GROUP BY LTRIM(RTRIM(wo.work_order_number))
+                    ) x
+                    ORDER BY x.work_order_number ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """,
+                (rs, rowNum) -> WorkOrderNumberOptionDto.builder()
+                        .id(rs.getLong("id"))
+                        .workOrderNumber(rs.getString("work_order_number"))
+                        .build(),
+                safeCompanyId,
+                offset,
+                safeSize)
+                : jdbcTemplate.query("""
+                    SELECT x.id, x.work_order_number
+                    FROM (
+                        SELECT MIN(wo.id) AS id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
+                        FROM work_orders wo
+                        INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id
+                        WHERE wo.deleted = 0
+                          AND wo.work_order_number IS NOT NULL
+                          AND LTRIM(RTRIM(wo.work_order_number)) <> ''
+                          AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')
+                        GROUP BY LTRIM(RTRIM(wo.work_order_number))
+                    ) x
+                    ORDER BY x.work_order_number ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """,
                 (rs, rowNum) -> WorkOrderNumberOptionDto.builder()
                         .id(rs.getLong("id"))
                         .workOrderNumber(rs.getString("work_order_number"))
                         .build(),
                 offset,
                 safeSize);
-        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId, true);
+
+        List<WorkOrderNumberOptionDto> favouriteWorkOrderNumbers = getFavouriteWorkOrderNumbers(technicianId, true, safeCompanyId);
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderNumberListResponse.builder()
                 .workOrderNumbers(workOrderNumbers)
@@ -499,27 +657,51 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size) {
+    public WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
 
-        long total = queryLong("""
-                SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.gl_account)))
-                FROM work_orders wo
-                WHERE wo.deleted = 0
-                  AND wo.gl_account IS NOT NULL
-                  AND LTRIM(RTRIM(wo.gl_account)) <> ''
-                """);
-        List<String> glAccounts = jdbcTemplate.queryForList("""
-                SELECT DISTINCT LTRIM(RTRIM(wo.gl_account)) AS gl_account
-                FROM work_orders wo
-                WHERE wo.deleted = 0
-                  AND wo.gl_account IS NOT NULL
-                  AND LTRIM(RTRIM(wo.gl_account)) <> ''
-                ORDER BY gl_account ASC
-                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, String.class, offset, safeSize);
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        String companyFilter = companyScopedWorkOrders ? " AND wo.company_id = ? " : "";
+        long total = companyScopedWorkOrders
+                ? queryLong("""
+                    SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.gl_account)))
+                    FROM work_orders wo
+                    WHERE wo.deleted = 0
+                      AND wo.gl_account IS NOT NULL
+                      AND LTRIM(RTRIM(wo.gl_account)) <> ''
+                      %s
+                    """.formatted(companyFilter), safeCompanyId)
+                : queryLong("""
+                    SELECT COUNT(DISTINCT LTRIM(RTRIM(wo.gl_account)))
+                    FROM work_orders wo
+                    WHERE wo.deleted = 0
+                      AND wo.gl_account IS NOT NULL
+                      AND LTRIM(RTRIM(wo.gl_account)) <> ''
+                    """);
+        List<String> glAccounts = companyScopedWorkOrders
+                ? jdbcTemplate.queryForList("""
+                    SELECT DISTINCT LTRIM(RTRIM(wo.gl_account)) AS gl_account
+                    FROM work_orders wo
+                    WHERE wo.deleted = 0
+                      AND wo.gl_account IS NOT NULL
+                      AND LTRIM(RTRIM(wo.gl_account)) <> ''
+                      AND wo.company_id = ?
+                    ORDER BY gl_account ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, String.class, safeCompanyId, offset, safeSize)
+                : jdbcTemplate.queryForList("""
+                    SELECT DISTINCT LTRIM(RTRIM(wo.gl_account)) AS gl_account
+                    FROM work_orders wo
+                    WHERE wo.deleted = 0
+                      AND wo.gl_account IS NOT NULL
+                      AND LTRIM(RTRIM(wo.gl_account)) <> ''
+                    ORDER BY gl_account ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, String.class, offset, safeSize);
 
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderGlAccountListResponse.builder()
@@ -533,7 +715,9 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderTypeListResponse getWorkOrderTypes(int page, int size) {
+    public WorkOrderTypeListResponse getWorkOrderTypes(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -567,15 +751,22 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .map(column -> "wot." + column)
                 .toList());
         String orderColumn = resolvePreferredOrderColumn(columns);
+        boolean companyScopedWorkOrderTypes = columns.stream().anyMatch(column -> "company_id".equalsIgnoreCase(column));
+        String companyFilter = companyScopedWorkOrderTypes ? "WHERE wot.company_id = ?" : "";
         String listSql = """
                 SELECT %s
                 FROM %s wot
+                %s
                 ORDER BY wot.%s ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """.formatted(selectedColumns, quotedTable, quoteIdentifier(orderColumn));
+                """.formatted(selectedColumns, quotedTable, companyFilter, quoteIdentifier(orderColumn));
 
-        long total = queryLong("SELECT COUNT(1) FROM " + quotedTable);
-        List<Map<String, Object>> workOrderTypes = jdbcTemplate.queryForList(listSql, offset, safeSize);
+        long total = companyScopedWorkOrderTypes
+                ? queryLong("SELECT COUNT(1) FROM " + quotedTable + " WHERE company_id = ?", safeCompanyId)
+                : queryLong("SELECT COUNT(1) FROM " + quotedTable);
+        List<Map<String, Object>> workOrderTypes = companyScopedWorkOrderTypes
+                ? jdbcTemplate.queryForList(listSql, safeCompanyId, offset, safeSize)
+                : jdbcTemplate.queryForList(listSql, offset, safeSize);
 
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderTypeListResponse.builder()
@@ -616,7 +807,9 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size) {
+    public WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
@@ -635,23 +828,29 @@ public class EamLookupServiceImpl implements EamLookupService {
 
         String quotedTable = "[" + propertyUnitSource.tableName().replace("]", "]]") + "]";
         String quotedColumn = "[" + propertyUnitSource.columnName().replace("]", "]]") + "]";
+        boolean companyScopedSource = columnExists(propertyUnitSource.tableName(), "company_id");
+        String companyFilter = companyScopedSource ? " AND src.[company_id] = ? " : "";
         String totalSql = """
                 SELECT COUNT(DISTINCT LTRIM(RTRIM(src.%s)))
                 FROM %s src
                 WHERE src.%s IS NOT NULL
                   AND LTRIM(RTRIM(src.%s)) <> ''
-                """.formatted(quotedColumn, quotedTable, quotedColumn, quotedColumn);
+                  %s
+                """.formatted(quotedColumn, quotedTable, quotedColumn, quotedColumn, companyFilter);
         String listSql = """
                 SELECT DISTINCT LTRIM(RTRIM(src.%s)) AS property_unit
                 FROM %s src
                 WHERE src.%s IS NOT NULL
                   AND LTRIM(RTRIM(src.%s)) <> ''
+                  %s
                 ORDER BY property_unit ASC
                 OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """.formatted(quotedColumn, quotedTable, quotedColumn, quotedColumn);
+                """.formatted(quotedColumn, quotedTable, quotedColumn, quotedColumn, companyFilter);
 
-        long total = queryLong(totalSql);
-        List<String> propertyUnits = jdbcTemplate.queryForList(listSql, String.class, offset, safeSize);
+        long total = companyScopedSource ? queryLong(totalSql, safeCompanyId) : queryLong(totalSql);
+        List<String> propertyUnits = companyScopedSource
+                ? jdbcTemplate.queryForList(listSql, String.class, safeCompanyId, offset, safeSize)
+                : jdbcTemplate.queryForList(listSql, String.class, offset, safeSize);
 
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkRequestTypePropertyUnitListResponse.builder()
@@ -720,17 +919,29 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderListResponse getWorkOrders(int page, int size) {
+    public WorkOrderListResponse getWorkOrders(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
         int offset = safePage * safeSize;
 
-        long total = queryLong("SELECT COUNT(1) FROM work_orders WHERE deleted = 0");
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(workOrderSelect() + """
-                WHERE wo.deleted = 0
-                ORDER BY wo.planned_end_datetime ASC, wo.id ASC
-                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, offset, safeSize);
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        long total = companyScopedWorkOrders
+                ? queryLong("SELECT COUNT(1) FROM work_orders WHERE deleted = 0 AND company_id = ?", safeCompanyId)
+                : queryLong("SELECT COUNT(1) FROM work_orders WHERE deleted = 0");
+        List<Map<String, Object>> rows = companyScopedWorkOrders
+                ? jdbcTemplate.queryForList(workOrderSelect() + """
+                    WHERE wo.deleted = 0
+                      AND wo.company_id = ?
+                    ORDER BY wo.planned_end_datetime ASC, wo.id ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, safeCompanyId, offset, safeSize)
+                : jdbcTemplate.queryForList(workOrderSelect() + """
+                    WHERE wo.deleted = 0
+                    ORDER BY wo.planned_end_datetime ASC, wo.id ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, offset, safeSize);
         List<WorkOrderDetailsResponse> workOrders = rows.stream().map(this::mapWorkOrder).toList();
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return WorkOrderListResponse.builder()
@@ -744,8 +955,13 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderDetailsResponse getWorkOrderById(Long workOrderId) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(workOrderSelect() + " WHERE wo.deleted = 0 AND wo.id = ?", workOrderId);
+    public WorkOrderDetailsResponse getWorkOrderById(Long workOrderId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        List<Map<String, Object>> rows = companyScopedWorkOrders
+                ? jdbcTemplate.queryForList(workOrderSelect() + " WHERE wo.deleted = 0 AND wo.id = ? AND wo.company_id = ?", workOrderId, safeCompanyId)
+                : jdbcTemplate.queryForList(workOrderSelect() + " WHERE wo.deleted = 0 AND wo.id = ?", workOrderId);
         if (rows.isEmpty()) {
             throw new ResourceNotFoundException("Work order not found: " + workOrderId);
         }
@@ -753,26 +969,42 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId) {
-        ensureTechnicianExistsTm(technicianId);
-        WorkOrderDetailsResponse workOrder = getWorkOrderById(workOrderId);
-
-        tmJdbcTemplate.update("""
-                IF NOT EXISTS (
-                    SELECT 1
-                    FROM work_order_favourites
-                    WHERE technician_id = ? AND work_order_id = ?
-                )
-                BEGIN
-                    INSERT INTO work_order_favourites (technician_id, work_order_id)
-                    VALUES (?, ?)
-                END
-                """, technicianId, workOrderId, technicianId, workOrderId);
+    public WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        ensureTechnicianExistsTm(technicianId, safeCompanyId);
+        WorkOrderDetailsResponse workOrder = getWorkOrderById(workOrderId, safeCompanyId);
+        boolean companyScopedFavourites = hasTmCompanyIdColumn("work_order_favourites");
+        if (companyScopedFavourites) {
+            tmJdbcTemplate.update("""
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM work_order_favourites
+                        WHERE technician_id = ? AND work_order_id = ? AND company_id = ?
+                    )
+                    BEGIN
+                        INSERT INTO work_order_favourites (technician_id, work_order_id, company_id)
+                        VALUES (?, ?, ?)
+                    END
+                    """, technicianId, workOrderId, safeCompanyId, technicianId, workOrderId, safeCompanyId);
+        } else {
+            tmJdbcTemplate.update("""
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM work_order_favourites
+                        WHERE technician_id = ? AND work_order_id = ?
+                    )
+                    BEGIN
+                        INSERT INTO work_order_favourites (technician_id, work_order_id)
+                        VALUES (?, ?)
+                    END
+                    """, technicianId, workOrderId, technicianId, workOrderId);
+        }
 
         return workOrder;
     }
 
-    private List<WorkOrderNumberOptionDto> getFavouriteWorkOrderNumbers(Long technicianId, boolean capexOnly) {
+    private List<WorkOrderNumberOptionDto> getFavouriteWorkOrderNumbers(Long technicianId, boolean capexOnly, Long companyId) {
         if (technicianId == null) {
             return List.of();
         }
@@ -780,17 +1012,35 @@ public class EamLookupServiceImpl implements EamLookupService {
             return List.of();
         }
 
-        ensureTechnicianExistsTm(technicianId);
-        List<Long> workOrderIds = tmJdbcTemplate.query("""
-                        SELECT f.work_order_id
-                        FROM work_order_favourites f
-                        JOIN technicians t ON t.id = f.technician_id
-                        WHERE f.technician_id = ?
-                          AND t.is_deleted = 0
-                        ORDER BY f.created_at DESC, f.id DESC
-                        """,
-                (rs, rowNum) -> rs.getLong("work_order_id"),
-                technicianId);
+        ensureTechnicianExistsTm(technicianId, companyId);
+        boolean companyScopedFavourites = hasTmCompanyIdColumn("work_order_favourites");
+        List<Long> workOrderIds = companyScopedFavourites
+                ? tmJdbcTemplate.query("""
+                            SELECT f.work_order_id
+                            FROM work_order_favourites f
+                            JOIN technicians t ON t.id = f.technician_id
+                            WHERE f.technician_id = ?
+                              AND t.is_deleted = 0
+                              AND t.company_id = ?
+                              AND f.company_id = ?
+                            ORDER BY f.created_at DESC, f.id DESC
+                            """,
+                    (rs, rowNum) -> rs.getLong("work_order_id"),
+                    technicianId,
+                    companyId,
+                    companyId)
+                : tmJdbcTemplate.query("""
+                            SELECT f.work_order_id
+                            FROM work_order_favourites f
+                            JOIN technicians t ON t.id = f.technician_id
+                            WHERE f.technician_id = ?
+                              AND t.is_deleted = 0
+                              AND t.company_id = ?
+                            ORDER BY f.created_at DESC, f.id DESC
+                            """,
+                    (rs, rowNum) -> rs.getLong("work_order_id"),
+                    technicianId,
+                    companyId);
         if (workOrderIds.isEmpty()) {
             return List.of();
         }
@@ -798,6 +1048,8 @@ public class EamLookupServiceImpl implements EamLookupService {
         String placeholders = String.join(",", java.util.Collections.nCopies(workOrderIds.size(), "?"));
         String capexJoin = capexOnly ? "INNER JOIN work_order_types wot ON wot.id = wo.work_order_type_id" : "";
         String capexFilter = capexOnly ? "AND UPPER(LTRIM(RTRIM(wot.cost_treatment))) IN ('CAPEX', 'CAPITAL')" : "";
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        String companyFilter = companyScopedWorkOrders ? "AND wo.company_id = ? " : "";
         String sql = """
                 SELECT wo.id, LTRIM(RTRIM(wo.work_order_number)) AS work_order_number
                 FROM work_orders wo
@@ -807,8 +1059,12 @@ public class EamLookupServiceImpl implements EamLookupService {
                   AND wo.work_order_number IS NOT NULL
                   AND LTRIM(RTRIM(wo.work_order_number)) <> ''
                   %s
-                """.formatted(capexJoin, placeholders, capexFilter);
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, workOrderIds.toArray());
+                  %s
+                """.formatted(capexJoin, placeholders, capexFilter, companyFilter);
+        Object[] args = companyScopedWorkOrders
+                ? appendArg(workOrderIds.toArray(), companyId)
+                : workOrderIds.toArray();
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, args);
 
         Map<Long, String> numberById = new HashMap<>();
         for (Map<String, Object> row : rows) {
@@ -840,18 +1096,31 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public TechnicianHolidayListResponse getHolidays(int page, int size) {
+    public TechnicianHolidayListResponse getHolidays(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
 
-        long total = queryLong("SELECT COUNT(1) FROM technician_holidays");
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                SELECT id, holiday_name, holiday_type, holiday_date, notes, created_at
-                FROM technician_holidays
-                ORDER BY holiday_date ASC, id ASC
-                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, offset, safeSize);
+        boolean companyScopedHolidays = hasCompanyIdColumn("technician_holidays");
+        long total = companyScopedHolidays
+                ? queryLong("SELECT COUNT(1) FROM technician_holidays WHERE company_id = ?", safeCompanyId)
+                : queryLong("SELECT COUNT(1) FROM technician_holidays");
+        List<Map<String, Object>> rows = companyScopedHolidays
+                ? jdbcTemplate.queryForList("""
+                    SELECT id, holiday_name, holiday_type, holiday_date, notes, created_at
+                    FROM technician_holidays
+                    WHERE company_id = ?
+                    ORDER BY holiday_date ASC, id ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, safeCompanyId, offset, safeSize)
+                : jdbcTemplate.queryForList("""
+                    SELECT id, holiday_name, holiday_type, holiday_date, notes, created_at
+                    FROM technician_holidays
+                    ORDER BY holiday_date ASC, id ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, offset, safeSize);
         List<TechnicianHolidayResponse> holidays = rows.stream().map(this::mapHoliday).toList();
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return TechnicianHolidayListResponse.builder()
@@ -865,12 +1134,21 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public TechnicianHolidayResponse getHolidayById(Long holidayId) {
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                SELECT id, holiday_name, holiday_type, holiday_date, notes, created_at
-                FROM technician_holidays
-                WHERE id = ?
-                """, holidayId);
+    public TechnicianHolidayResponse getHolidayById(Long holidayId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        boolean companyScopedHolidays = hasCompanyIdColumn("technician_holidays");
+        List<Map<String, Object>> rows = companyScopedHolidays
+                ? jdbcTemplate.queryForList("""
+                    SELECT id, holiday_name, holiday_type, holiday_date, notes, created_at
+                    FROM technician_holidays
+                    WHERE id = ? AND company_id = ?
+                    """, holidayId, safeCompanyId)
+                : jdbcTemplate.queryForList("""
+                    SELECT id, holiday_name, holiday_type, holiday_date, notes, created_at
+                    FROM technician_holidays
+                    WHERE id = ?
+                    """, holidayId);
         if (rows.isEmpty()) {
             throw new ResourceNotFoundException("Holiday not found: " + holidayId);
         }
@@ -878,16 +1156,27 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public TechnicianLeaveListResponse getTechniciansLeaves(int page, int size) {
+    public TechnicianLeaveListResponse getTechniciansLeaves(int page, int size, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
         int offset = safePage * safeSize;
 
-        long total = queryLong("SELECT COUNT(1) FROM technician_leaves");
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(leavesSelect() + """
-                ORDER BY l.start_date ASC, l.id ASC
-                OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
-                """, offset, safeSize);
+        boolean companyScopedLeaves = hasCompanyIdColumn("technician_leaves");
+        long total = companyScopedLeaves
+                ? queryLong("SELECT COUNT(1) FROM technician_leaves WHERE company_id = ?", safeCompanyId)
+                : queryLong("SELECT COUNT(1) FROM technician_leaves");
+        List<Map<String, Object>> rows = companyScopedLeaves
+                ? jdbcTemplate.queryForList(leavesSelect() + """
+                    WHERE l.company_id = ?
+                    ORDER BY l.start_date ASC, l.id ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, safeCompanyId, offset, safeSize)
+                : jdbcTemplate.queryForList(leavesSelect() + """
+                    ORDER BY l.start_date ASC, l.id ASC
+                    OFFSET ? ROWS FETCH NEXT ? ROWS ONLY
+                    """, offset, safeSize);
         List<TechnicianLeaveResponse> leaves = rows.stream().map(this::mapLeave).toList();
         int totalPages = safeSize <= 0 ? 0 : (int) Math.ceil((double) total / safeSize);
         return TechnicianLeaveListResponse.builder()
@@ -901,9 +1190,14 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId) {
-        ensureTechnicianExists(technicianId);
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? ORDER BY l.start_date ASC, l.id ASC", technicianId);
+    public TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        ensureTechnicianExistsTm(technicianId, safeCompanyId);
+        boolean companyScopedLeaves = hasCompanyIdColumn("technician_leaves");
+        List<Map<String, Object>> rows = companyScopedLeaves
+                ? jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? AND l.company_id = ? ORDER BY l.start_date ASC, l.id ASC", technicianId, safeCompanyId)
+                : jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? ORDER BY l.start_date ASC, l.id ASC", technicianId);
         List<TechnicianLeaveResponse> leaves = rows.stream().map(this::mapLeave).toList();
         return TechnicianLeaveListResponse.builder()
                 .leaves(leaves)
@@ -916,9 +1210,14 @@ public class EamLookupServiceImpl implements EamLookupService {
     }
 
     @Override
-    public TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId) {
-        ensureTechnicianExists(technicianId);
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? AND l.id = ?", technicianId, leaveId);
+    public TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId, Long companyId) {
+        Long safeCompanyId = requireCompanyId(companyId);
+        ensureCompanyExistsInEam(safeCompanyId);
+        ensureTechnicianExistsTm(technicianId, safeCompanyId);
+        boolean companyScopedLeaves = hasCompanyIdColumn("technician_leaves");
+        List<Map<String, Object>> rows = companyScopedLeaves
+                ? jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? AND l.id = ? AND l.company_id = ?", technicianId, leaveId, safeCompanyId)
+                : jdbcTemplate.queryForList(leavesSelect() + " WHERE l.technician_id = ? AND l.id = ?", technicianId, leaveId);
         if (rows.isEmpty()) {
             throw new ResourceNotFoundException("Leave not found: " + leaveId);
         }
@@ -1161,47 +1460,47 @@ public class EamLookupServiceImpl implements EamLookupService {
         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate technicianId");
     }
 
-    private Map<String, Object> getTechnicianRowOrThrowTm(Long technicianId) {
+    private Map<String, Object> getTechnicianRowOrThrowTm(Long technicianId, Long companyId) {
         List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
-                SELECT id, technician_id, badge_number, first_name, last_name, full_name,
+                SELECT id, company_id, technician_id, badge_number, first_name, last_name, full_name,
                        technician_type, skills, phone_number, email, address, status,
                        hire_date, work_shift, technician_photo_url, certificate_url,
                        certificate_issue_date, certificate_expiry_date, termination_date,
                        certifications, notes
                 FROM technicians
-                WHERE id = ? AND is_deleted = 0
-                """, technicianId);
+                WHERE id = ? AND is_deleted = 0 AND company_id = ?
+                """, technicianId, companyId);
         if (rows.isEmpty()) {
             throw new ResourceNotFoundException("Technician not found: " + technicianId);
         }
         return rows.get(0);
     }
 
-    private Map<String, Object> getTeamRowOrThrowTm(Long teamId) {
+    private Map<String, Object> getTeamRowOrThrowTm(Long teamId, Long companyId) {
         List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
-                SELECT id, team_name, team_description, status, start_date, end_date, notes
+                SELECT id, company_id, team_name, team_description, status, start_date, end_date, notes
                 FROM technician_teams
-                WHERE id = ?
-                """, teamId);
+                WHERE id = ? AND company_id = ?
+                """, teamId, companyId);
         if (rows.isEmpty()) {
             throw new ResourceNotFoundException("Technician team not found: " + teamId);
         }
         return rows.get(0);
     }
 
-    private void ensureTeamNameUniqueTm(String teamName, Long currentTeamId) {
+    private void ensureTeamNameUniqueTm(String teamName, Long currentTeamId, Long companyId) {
         String sql = currentTeamId == null
-                ? "SELECT COUNT(1) FROM technician_teams WHERE LOWER(team_name) = LOWER(?)"
-                : "SELECT COUNT(1) FROM technician_teams WHERE LOWER(team_name) = LOWER(?) AND id <> ?";
+                ? "SELECT COUNT(1) FROM technician_teams WHERE company_id = ? AND LOWER(team_name) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technician_teams WHERE company_id = ? AND LOWER(team_name) = LOWER(?) AND id <> ?";
         long count = currentTeamId == null
-                ? queryLongTm(sql, teamName)
-                : queryLongTm(sql, teamName, currentTeamId);
+                ? queryLongTm(sql, companyId, teamName)
+                : queryLongTm(sql, companyId, teamName, currentTeamId);
         if (count > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Technician team with the same name already exists");
         }
     }
 
-    private void applyTeamMembershipTm(Long teamId, List<Long> technicianIds, Long requestedLeaderId) {
+    private void applyTeamMembershipTm(Long teamId, Long companyId, List<Long> technicianIds, Long requestedLeaderId) {
         boolean replaceMembership = technicianIds != null;
         if (!replaceMembership && requestedLeaderId == null) {
             return;
@@ -1230,13 +1529,14 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
 
         if (replaceMembership) {
-            syncTeamTechniciansTm(teamId, desiredIds, requestedLeaderId, currentMembers);
+            syncTeamTechniciansTm(teamId, companyId, desiredIds, requestedLeaderId, currentMembers);
         } else {
             updateLeaderOnlyTm(currentMembers, teamId, requestedLeaderId);
         }
     }
 
     private void syncTeamTechniciansTm(Long teamId,
+                                       Long companyId,
                                        Set<Long> desiredIds,
                                        Long requestedLeaderId,
                                        List<Map<String, Object>> currentMembers) {
@@ -1247,7 +1547,7 @@ public class EamLookupServiceImpl implements EamLookupService {
             return;
         }
 
-        Set<Long> existingTechnicians = fetchExistingTechnicianIdsTm(desiredIds);
+        Set<Long> existingTechnicians = fetchExistingTechnicianIdsTm(desiredIds, companyId);
         if (existingTechnicians.size() != desiredIds.size()) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "One or more technicians were not found");
         }
@@ -1313,13 +1613,19 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
-    private Set<Long> fetchExistingTechnicianIdsTm(Set<Long> technicianIds) {
+    private Set<Long> fetchExistingTechnicianIdsTm(Set<Long> technicianIds, Long companyId) {
         if (technicianIds.isEmpty()) {
             return Set.of();
         }
         String placeholders = String.join(",", java.util.Collections.nCopies(technicianIds.size(), "?"));
-        String sql = "SELECT id FROM technicians WHERE is_deleted = 0 AND id IN (" + placeholders + ")";
-        List<Map<String, Object>> rows = tmJdbcTemplate.queryForList(sql, technicianIds.toArray());
+        String sql = "SELECT id FROM technicians WHERE is_deleted = 0 AND company_id = ? AND id IN (" + placeholders + ")";
+        Object[] args = new Object[technicianIds.size() + 1];
+        args[0] = companyId;
+        int idx = 1;
+        for (Long technicianId : technicianIds) {
+            args[idx++] = technicianId;
+        }
+        List<Map<String, Object>> rows = tmJdbcTemplate.queryForList(sql, args);
         Set<Long> ids = new LinkedHashSet<>();
         for (Map<String, Object> row : rows) {
             ids.add(asLong(row.get("id")));
@@ -1327,46 +1633,46 @@ public class EamLookupServiceImpl implements EamLookupService {
         return ids;
     }
 
-    private boolean existsEmailForOtherTechnicianTm(String email, Long currentTechnicianId) {
+    private boolean existsEmailForOtherTechnicianTm(String email, Long currentTechnicianId, Long companyId) {
         String sql = currentTechnicianId == null
-                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(email) = LOWER(?)"
-                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(email) = LOWER(?) AND id <> ?";
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(email) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(email) = LOWER(?) AND id <> ?";
         long count = currentTechnicianId == null
-                ? queryLongTm(sql, email)
-                : queryLongTm(sql, email, currentTechnicianId);
+                ? queryLongTm(sql, companyId, email)
+                : queryLongTm(sql, companyId, email, currentTechnicianId);
         return count > 0;
     }
 
-    private String requireBadgeUniqueTm(String badgeNumber, Long currentTechnicianId) {
+    private String requireBadgeUniqueTm(String badgeNumber, Long currentTechnicianId, Long companyId) {
         String trimmed = requireNonBlank(badgeNumber, "badgeNumber is required");
         String sql = currentTechnicianId == null
-                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(badge_number) = LOWER(?)"
-                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(badge_number) = LOWER(?) AND id <> ?";
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(badge_number) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(badge_number) = LOWER(?) AND id <> ?";
         long count = currentTechnicianId == null
-                ? queryLongTm(sql, trimmed)
-                : queryLongTm(sql, trimmed, currentTechnicianId);
+                ? queryLongTm(sql, companyId, trimmed)
+                : queryLongTm(sql, companyId, trimmed, currentTechnicianId);
         if (count > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "badgeNumber already exists");
         }
         return trimmed;
     }
 
-    private void ensureTechnicianIdUniqueTm(String technicianId, Long currentTechnicianId) {
+    private void ensureTechnicianIdUniqueTm(String technicianId, Long currentTechnicianId, Long companyId) {
         String sql = currentTechnicianId == null
-                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?)"
-                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?) AND id <> ?";
+                ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(technician_id) = LOWER(?)"
+                : "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(technician_id) = LOWER(?) AND id <> ?";
         long count = currentTechnicianId == null
-                ? queryLongTm(sql, technicianId)
-                : queryLongTm(sql, technicianId, currentTechnicianId);
+                ? queryLongTm(sql, companyId, technicianId)
+                : queryLongTm(sql, companyId, technicianId, currentTechnicianId);
         if (count > 0) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "technicianId already exists");
         }
     }
 
-    private String determineTechnicianIdTm(String providedTechnicianId, Long currentTechnicianId) {
+    private String determineTechnicianIdTm(String providedTechnicianId, Long currentTechnicianId, Long companyId) {
         if (providedTechnicianId != null && !providedTechnicianId.isBlank()) {
             String trimmed = providedTechnicianId.trim();
-            ensureTechnicianIdUniqueTm(trimmed, currentTechnicianId);
+            ensureTechnicianIdUniqueTm(trimmed, currentTechnicianId, companyId);
             return trimmed;
         }
 
@@ -1375,8 +1681,8 @@ public class EamLookupServiceImpl implements EamLookupService {
             int random = java.util.concurrent.ThreadLocalRandom.current().nextInt(0, 10000);
             String candidate = String.format("TECH-%s-%04d", date, random);
             long count = queryLongTm(
-                    "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?)",
-                    candidate
+                    "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(technician_id) = LOWER(?)",
+                    companyId, candidate
             );
             if (count == 0) {
                 return candidate;
@@ -1385,10 +1691,31 @@ public class EamLookupServiceImpl implements EamLookupService {
         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate technicianId");
     }
 
+    private void ensureTechnicianExistsTm(Long technicianId, Long companyId) {
+        long count = queryLongTm("SELECT COUNT(1) FROM technicians WHERE id = ? AND company_id = ? AND is_deleted = 0", technicianId, companyId);
+        if (count == 0) {
+            throw new ResourceNotFoundException("Technician not found: " + technicianId);
+        }
+    }
+
     private void ensureTechnicianExistsTm(Long technicianId) {
         long count = queryLongTm("SELECT COUNT(1) FROM technicians WHERE id = ? AND is_deleted = 0", technicianId);
         if (count == 0) {
             throw new ResourceNotFoundException("Technician not found: " + technicianId);
+        }
+    }
+
+    private Long requireCompanyId(Long companyId) {
+        if (companyId == null || companyId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "companyId is required");
+        }
+        return companyId;
+    }
+
+    private void ensureCompanyExistsInEam(Long companyId) {
+        long count = queryLong("SELECT COUNT(1) FROM companies WHERE id = ? AND active = 1", companyId);
+        if (count == 0) {
+            throw new ResourceNotFoundException("Company not found in EAM: " + companyId);
         }
     }
 
@@ -1483,24 +1810,26 @@ public class EamLookupServiceImpl implements EamLookupService {
                 """;
     }
 
-    private TechnicianDetailsResponse mapTechnicianTm(Map<String, Object> row) {
+    private TechnicianDetailsResponse mapTechnicianTm(Map<String, Object> row, Long companyId) {
         Long technicianId = asLong(row.get("id"));
         List<TechnicianTeamMembershipResponse> memberships = tmJdbcTemplate.queryForList("""
                 SELECT m.team_id, tt.team_name, m.team_leader
                 FROM technician_team_members m
                 JOIN technician_teams tt ON tt.id = m.team_id
                 WHERE m.technician_id = ?
-                """, technicianId).stream().map(member -> {
+                  AND tt.company_id = ?
+                """, technicianId, companyId).stream().map(member -> {
             Long teamId = asLong(member.get("team_id"));
             List<String> leaderNames = tmJdbcTemplate.query("""
                             SELECT COALESCE(NULLIF(LTRIM(RTRIM(t.full_name)), ''),
                                             LTRIM(RTRIM(COALESCE(t.first_name, '') + ' ' + COALESCE(t.last_name, ''))))
                             FROM technician_team_members tm
                             JOIN technicians t ON t.id = tm.technician_id
-                            WHERE tm.team_id = ? AND tm.team_leader = 1
+                            JOIN technician_teams tt ON tt.id = tm.team_id
+                            WHERE tm.team_id = ? AND tm.team_leader = 1 AND tt.company_id = ?
                             """,
                     (rs, rowNum) -> rs.getString(1),
-                    teamId);
+                    teamId, companyId);
             return TechnicianTeamMembershipResponse.builder()
                     .teamId(teamId)
                     .teamName(asString(member.get("team_name")))
@@ -1511,6 +1840,7 @@ public class EamLookupServiceImpl implements EamLookupService {
 
         return TechnicianDetailsResponse.builder()
                 .id(technicianId)
+                .companyId(asLong(row.get("company_id")))
                 .technicianId(asString(row.get("technician_id")))
                 .badgeNumber(asString(row.get("badge_number")))
                 .firstName(asString(row.get("first_name")))
@@ -1537,20 +1867,22 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
-    private TechnicianTeamDetailsResponse mapTeamTm(Map<String, Object> row) {
+    private TechnicianTeamDetailsResponse mapTeamTm(Map<String, Object> row, Long companyId) {
         Long teamId = asLong(row.get("id"));
         List<Map<String, Object>> technicianRows = tmJdbcTemplate.queryForList("""
-                SELECT t.id, t.technician_id, t.badge_number, t.first_name, t.last_name, t.full_name,
+                SELECT t.id, t.company_id, t.technician_id, t.badge_number, t.first_name, t.last_name, t.full_name,
                        t.technician_type, t.skills, t.phone_number, t.email, t.address, t.status,
                        t.hire_date, t.work_shift, t.technician_photo_url, t.certificate_url,
                        t.certificate_issue_date, t.certificate_expiry_date, t.termination_date,
                        t.certifications, t.notes
                 FROM technician_team_members m
                 JOIN technicians t ON t.id = m.technician_id
-                WHERE m.team_id = ? AND t.is_deleted = 0
+                WHERE m.team_id = ? AND t.is_deleted = 0 AND t.company_id = ?
                 ORDER BY t.id
-                """, teamId);
-        List<TechnicianDetailsResponse> technicians = technicianRows.stream().map(this::mapTechnicianTm).toList();
+                """, teamId, companyId);
+        List<TechnicianDetailsResponse> technicians = technicianRows.stream()
+                .map(technicianRow -> mapTechnicianTm(technicianRow, companyId))
+                .toList();
 
         List<Map<String, Object>> leaderRows = tmJdbcTemplate.queryForList("""
                 SELECT TOP 1 t.id AS leader_id,
@@ -1558,13 +1890,15 @@ public class EamLookupServiceImpl implements EamLookupService {
                                 LTRIM(RTRIM(COALESCE(t.first_name, '') + ' ' + COALESCE(t.last_name, '')))) AS leader_name
                 FROM technician_team_members m
                 JOIN technicians t ON t.id = m.technician_id
-                WHERE m.team_id = ? AND m.team_leader = 1
-                """, teamId);
+                JOIN technician_teams tt ON tt.id = m.team_id
+                WHERE m.team_id = ? AND m.team_leader = 1 AND tt.company_id = ?
+                """, teamId, companyId);
         Long teamLeaderId = leaderRows.isEmpty() ? null : asLong(leaderRows.get(0).get("leader_id"));
         String teamLeaderName = leaderRows.isEmpty() ? null : asString(leaderRows.get(0).get("leader_name"));
 
         return TechnicianTeamDetailsResponse.builder()
                 .id(teamId)
+                .companyId(asLong(row.get("company_id")))
                 .teamName(asString(row.get("team_name")))
                 .teamDescription(asString(row.get("team_description")))
                 .status(asString(row.get("status")))
@@ -1648,7 +1982,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
-    private List<DailyAvailabilityDto> buildAvailability(Long technicianId, Integer days) {
+    private List<DailyAvailabilityDto> buildAvailability(Long technicianId, Integer days, Long companyId) {
         int horizon = days == null ? 31 : Math.max(days, 1);
         LocalDate start = LocalDate.now();
         LocalDate endExclusive = start.plusDays(horizon);
@@ -1658,23 +1992,41 @@ public class EamLookupServiceImpl implements EamLookupService {
             statusByDate.put(d, d.getDayOfWeek().getValue() == 7 ? "HOLIDAY" : "AVAILABLE");
         }
 
-        List<LocalDate> holidays = jdbcTemplate.query("""
-                        SELECT holiday_date
-                        FROM technician_holidays
-                        WHERE holiday_date >= ? AND holiday_date < ?
-                        """,
-                (rs, rowNum) -> rs.getObject("holiday_date", LocalDate.class),
-                start,
-                endExclusive);
+        boolean companyScopedHolidays = hasCompanyIdColumn("technician_holidays");
+        List<LocalDate> holidays = companyScopedHolidays
+                ? jdbcTemplate.query("""
+                            SELECT holiday_date
+                            FROM technician_holidays
+                            WHERE holiday_date >= ? AND holiday_date < ? AND company_id = ?
+                            """,
+                    (rs, rowNum) -> rs.getObject("holiday_date", LocalDate.class),
+                    start,
+                    endExclusive,
+                    companyId)
+                : jdbcTemplate.query("""
+                            SELECT holiday_date
+                            FROM technician_holidays
+                            WHERE holiday_date >= ? AND holiday_date < ?
+                            """,
+                    (rs, rowNum) -> rs.getObject("holiday_date", LocalDate.class),
+                    start,
+                    endExclusive);
         for (LocalDate holiday : holidays) {
             statusByDate.put(holiday, "HOLIDAY");
         }
 
-        List<Map<String, Object>> leaves = jdbcTemplate.queryForList("""
-                SELECT start_date, end_date
-                FROM technician_leaves
-                WHERE technician_id = ? AND end_date >= ? AND start_date < ?
-                """, technicianId, start, endExclusive);
+        boolean companyScopedLeaves = hasCompanyIdColumn("technician_leaves");
+        List<Map<String, Object>> leaves = companyScopedLeaves
+                ? jdbcTemplate.queryForList("""
+                    SELECT start_date, end_date
+                    FROM technician_leaves
+                    WHERE technician_id = ? AND end_date >= ? AND start_date < ? AND company_id = ?
+                    """, technicianId, start, endExclusive, companyId)
+                : jdbcTemplate.queryForList("""
+                    SELECT start_date, end_date
+                    FROM technician_leaves
+                    WHERE technician_id = ? AND end_date >= ? AND start_date < ?
+                    """, technicianId, start, endExclusive);
         for (Map<String, Object> leave : leaves) {
             LocalDate leaveStart = asLocalDate(leave.get("start_date"));
             LocalDate leaveEnd = asLocalDate(leave.get("end_date"));
@@ -1685,18 +2037,33 @@ public class EamLookupServiceImpl implements EamLookupService {
             }
         }
 
-        List<Map<String, Object>> bookings = jdbcTemplate.queryForList("""
-                SELECT planned_start_datetime, planned_end_datetime
-                FROM work_orders
-                WHERE deleted = 0
-                  AND status IN ('SCHEDULED','IN_PROGRESS')
-                  AND planned_start_datetime < ?
-                  AND planned_end_datetime > ?
-                  AND (
-                        assigned_technician_id = ?
-                        OR assigned_team_id IN (SELECT tm.team_id FROM technician_team_members tm WHERE tm.technician_id = ?)
-                  )
-                """, endExclusive.atStartOfDay(), start.atStartOfDay(), technicianId, technicianId);
+        boolean companyScopedWorkOrders = hasCompanyIdColumn("work_orders");
+        List<Map<String, Object>> bookings = companyScopedWorkOrders
+                ? jdbcTemplate.queryForList("""
+                    SELECT planned_start_datetime, planned_end_datetime
+                    FROM work_orders
+                    WHERE deleted = 0
+                      AND status IN ('SCHEDULED','IN_PROGRESS')
+                      AND planned_start_datetime < ?
+                      AND planned_end_datetime > ?
+                      AND company_id = ?
+                      AND (
+                            assigned_technician_id = ?
+                            OR assigned_team_id IN (SELECT tm.team_id FROM technician_team_members tm WHERE tm.technician_id = ?)
+                      )
+                    """, endExclusive.atStartOfDay(), start.atStartOfDay(), companyId, technicianId, technicianId)
+                : jdbcTemplate.queryForList("""
+                    SELECT planned_start_datetime, planned_end_datetime
+                    FROM work_orders
+                    WHERE deleted = 0
+                      AND status IN ('SCHEDULED','IN_PROGRESS')
+                      AND planned_start_datetime < ?
+                      AND planned_end_datetime > ?
+                      AND (
+                            assigned_technician_id = ?
+                            OR assigned_team_id IN (SELECT tm.team_id FROM technician_team_members tm WHERE tm.technician_id = ?)
+                      )
+                    """, endExclusive.atStartOfDay(), start.atStartOfDay(), technicianId, technicianId);
 
         List<DailyAvailabilityDto> response = new ArrayList<>();
         for (LocalDate d = start; d.isBefore(endExclusive); d = d.plusDays(1)) {
@@ -1855,8 +2222,26 @@ public class EamLookupServiceImpl implements EamLookupService {
         return value == null ? 0L : value.longValue();
     }
 
+    private boolean hasCompanyIdColumn(String tableName) {
+        return columnExists(tableName, "company_id");
+    }
+
+    private boolean hasTmCompanyIdColumn(String tableName) {
+        return columnExistsTm(tableName, "company_id");
+    }
+
     private boolean columnExists(String tableName, String columnName) {
         long count = queryLong("""
+                SELECT COUNT(1)
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = ?
+                  AND LOWER(COLUMN_NAME) = LOWER(?)
+                """, tableName, columnName);
+        return count > 0;
+    }
+
+    private boolean columnExistsTm(String tableName, String columnName) {
+        long count = queryLongTm("""
                 SELECT COUNT(1)
                 FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_NAME = ?
@@ -1873,6 +2258,12 @@ public class EamLookupServiceImpl implements EamLookupService {
                   AND TABLE_NAME = ?
                 """, tableName);
         return count > 0;
+    }
+
+    private Object[] appendArg(Object[] source, Object extraArg) {
+        Object[] args = java.util.Arrays.copyOf(source, source.length + 1);
+        args[source.length] = extraArg;
+        return args;
     }
 
     private String formatTimeAgo(LocalDateTime value) {

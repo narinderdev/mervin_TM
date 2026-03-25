@@ -10,6 +10,7 @@ import lombok.Data;
 public class TechnicianDetailsResponse {
 
     private Long id;
+    private Long companyId;
     private String technicianId;
     private String badgeNumber;
     private String firstName;

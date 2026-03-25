@@ -14,25 +14,25 @@ import java.util.List;
 
 public interface EamLookupRepository {
 
-    TechnicianDashboardResponse getTechnicianDashboard(Integer limit);
+    TechnicianDashboardResponse getTechnicianDashboard(Integer limit, Long companyId);
 
-    TechnicianListResponse getTechnicians(int page, int size);
+    TechnicianListResponse getTechnicians(int page, int size, Long companyId);
 
-    List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days);
+    List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days, Long companyId);
 
-    TechnicianTeamListResponse getTechnicianTeams(int page, int size);
+    TechnicianTeamListResponse getTechnicianTeams(int page, int size, Long companyId);
 
-    WorkOrderListResponse getWorkOrders(int page, int size);
+    WorkOrderListResponse getWorkOrders(int page, int size, Long companyId);
 
-    WorkOrderDetailsResponse getWorkOrderById(Long workOrderId);
+    WorkOrderDetailsResponse getWorkOrderById(Long workOrderId, Long companyId);
 
-    TechnicianHolidayListResponse getHolidays(int page, int size);
+    TechnicianHolidayListResponse getHolidays(int page, int size, Long companyId);
 
-    TechnicianHolidayResponse getHolidayById(Long holidayId);
+    TechnicianHolidayResponse getHolidayById(Long holidayId, Long companyId);
 
-    TechnicianLeaveListResponse getTechniciansLeaves(int page, int size);
+    TechnicianLeaveListResponse getTechniciansLeaves(int page, int size, Long companyId);
 
-    TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId);
+    TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId, Long companyId);
 
-    TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId);
+    TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId, Long companyId);
 }

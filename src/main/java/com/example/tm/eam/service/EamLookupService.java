@@ -24,53 +24,53 @@ import java.util.List;
 
 public interface EamLookupService {
 
-    TechnicianDashboardResponse getDashboardTechnicians(Integer limit);
+    TechnicianDashboardResponse getDashboardTechnicians(Integer limit, Long companyId);
 
     TechnicianDetailsResponse createTechnician(TechnicianCreateRequest request);
 
-    TechnicianDetailsResponse getTechnicianById(Long technicianId);
+    TechnicianDetailsResponse getTechnicianById(Long technicianId, Long companyId);
 
-    TechnicianDetailsResponse patchTechnician(Long technicianId, TechnicianPatchRequest request);
+    TechnicianDetailsResponse patchTechnician(Long technicianId, Long companyId, TechnicianPatchRequest request);
 
-    void deleteTechnician(Long technicianId);
+    void deleteTechnician(Long technicianId, Long companyId);
 
-    TechnicianListResponse getTechnicians(int page, int size);
+    TechnicianListResponse getTechnicians(int page, int size, Long companyId);
 
-    List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days);
+    List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days, Long companyId);
 
     TechnicianTeamDetailsResponse createTechnicianTeam(TechnicianTeamCreateRequest request);
 
-    TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId);
+    TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId, Long companyId);
 
-    TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, TechnicianTeamPatchRequest request);
+    TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, Long companyId, TechnicianTeamPatchRequest request);
 
-    void deleteTechnicianTeam(Long teamId);
+    void deleteTechnicianTeam(Long teamId, Long companyId);
 
-    TechnicianTeamListResponse getTechnicianTeams(int page, int size);
+    TechnicianTeamListResponse getTechnicianTeams(int page, int size, Long companyId);
 
-    WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId);
+    WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId, Long companyId);
 
-    WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId);
+    WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId, Long companyId);
 
-    WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size);
+    WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size, Long companyId);
 
-    WorkOrderTypeListResponse getWorkOrderTypes(int page, int size);
+    WorkOrderTypeListResponse getWorkOrderTypes(int page, int size, Long companyId);
 
-    WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size);
+    WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size, Long companyId);
 
-    WorkOrderListResponse getWorkOrders(int page, int size);
+    WorkOrderListResponse getWorkOrders(int page, int size, Long companyId);
 
-    WorkOrderDetailsResponse getWorkOrderById(Long workOrderId);
+    WorkOrderDetailsResponse getWorkOrderById(Long workOrderId, Long companyId);
 
-    WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId);
+    WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId, Long companyId);
 
-    TechnicianHolidayListResponse getHolidays(int page, int size);
+    TechnicianHolidayListResponse getHolidays(int page, int size, Long companyId);
 
-    TechnicianHolidayResponse getHolidayById(Long holidayId);
+    TechnicianHolidayResponse getHolidayById(Long holidayId, Long companyId);
 
-    TechnicianLeaveListResponse getTechniciansLeaves(int page, int size);
+    TechnicianLeaveListResponse getTechniciansLeaves(int page, int size, Long companyId);
 
-    TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId);
+    TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId, Long companyId);
 
-    TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId);
+    TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId, Long companyId);
 }

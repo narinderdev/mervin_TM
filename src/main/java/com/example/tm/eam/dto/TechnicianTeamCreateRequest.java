@@ -10,6 +10,7 @@ import java.util.List;
 @Getter
 @Setter
 public class TechnicianTeamCreateRequest {
+    private Long companyId;
 
     @NotBlank
     private String teamName;

@@ -10,6 +10,7 @@ import java.time.LocalDate;
 @Getter
 @Setter
 public class TechnicianCreateRequest {
+    private Long companyId;
 
     @NotBlank
     private String firstName;

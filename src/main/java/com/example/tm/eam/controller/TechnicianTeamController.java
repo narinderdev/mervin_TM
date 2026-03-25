@@ -31,9 +31,11 @@ public class TechnicianTeamController {
 
     @PostMapping("/technician-teams")
     public ResponseEntity<ApiResponse<?>> createTechnicianTeam(
+            @RequestParam("companyId") Long companyId,
             @Valid @RequestBody TechnicianTeamCreateRequest requestBody,
             HttpServletRequest request) {
-        log.info("EAM POST /technician-teams cid={}", correlationId(request));
+        requestBody.setCompanyId(companyId);
+        log.info("EAM POST /technician-teams companyId={} cid={}", companyId, correlationId(request));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.successResponse(
                 HttpStatus.CREATED.value(),
                 "Technician team created successfully",
@@ -43,32 +45,35 @@ public class TechnicianTeamController {
     @GetMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> getTechnicianTeamById(
             @PathVariable("id") Long teamId,
+            @RequestParam("companyId") Long companyId,
             HttpServletRequest request) {
-        log.info("EAM GET /technician-teams/{} cid={}", teamId, correlationId(request));
+        log.info("EAM GET /technician-teams/{} companyId={} cid={}", teamId, companyId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(),
                 "Technician team fetched successfully",
-                eamLookupService.getTechnicianTeamById(teamId)));
+                eamLookupService.getTechnicianTeamById(teamId, companyId)));
     }
 
     @PatchMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> patchTechnicianTeam(
             @PathVariable("id") Long teamId,
+            @RequestParam("companyId") Long companyId,
             @RequestBody TechnicianTeamPatchRequest requestBody,
             HttpServletRequest request) {
-        log.info("EAM PATCH /technician-teams/{} cid={}", teamId, correlationId(request));
+        log.info("EAM PATCH /technician-teams/{} companyId={} cid={}", teamId, companyId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(),
                 "Technician team updated successfully",
-                eamLookupService.patchTechnicianTeam(teamId, requestBody)));
+                eamLookupService.patchTechnicianTeam(teamId, companyId, requestBody)));
     }
 
     @DeleteMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> deleteTechnicianTeam(
             @PathVariable("id") Long teamId,
+            @RequestParam("companyId") Long companyId,
             HttpServletRequest request) {
-        log.info("EAM DELETE /technician-teams/{} cid={}", teamId, correlationId(request));
-        eamLookupService.deleteTechnicianTeam(teamId);
+        log.info("EAM DELETE /technician-teams/{} companyId={} cid={}", teamId, companyId, correlationId(request));
+        eamLookupService.deleteTechnicianTeam(teamId, companyId);
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(),
                 "Technician team deleted successfully",
@@ -79,10 +84,11 @@ public class TechnicianTeamController {
     public ResponseEntity<ApiResponse<?>> getTechnicianTeams(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam("companyId") Long companyId,
             HttpServletRequest request) {
-        log.info("EAM GET /technician-teams page={} size={} cid={}", page, size, correlationId(request));
+        log.info("EAM GET /technician-teams page={} size={} companyId={} cid={}", page, size, companyId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
-                HttpStatus.OK.value(), "Technician teams fetched successfully", eamLookupService.getTechnicianTeams(page, size)));
+                HttpStatus.OK.value(), "Technician teams fetched successfully", eamLookupService.getTechnicianTeams(page, size, companyId)));
     }
 
     private String correlationId(HttpServletRequest request) {
