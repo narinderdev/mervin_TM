@@ -9,10 +9,13 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
@@ -66,6 +69,30 @@ public class GlobalExceptionHandler {
         }
 
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
+    }
+
+    // Handles malformed request payload.
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(
+            HttpMessageNotReadableException exception,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Malformed request body", request);
+    }
+
+    // Handles missing request parameter.
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiErrorResponse> handleMissingServletRequestParameter(
+            MissingServletRequestParameterException exception,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Missing required request parameter: " + exception.getParameterName(), request);
+    }
+
+    // Handles invalid request parameter type conversion.
+    @ExceptionHandler(TypeMismatchException.class)
+    public ResponseEntity<ApiErrorResponse> handleTypeMismatchException(
+            TypeMismatchException exception,
+            HttpServletRequest request) {
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, "Invalid request parameter value", request);
     }
 
     // Handles handle no resource found.

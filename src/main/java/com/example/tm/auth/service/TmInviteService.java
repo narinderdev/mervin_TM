@@ -7,6 +7,7 @@ import com.example.tm.auth.entity.TmUserInvite;
 import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.shared.EmailService;
+import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.UUID;
@@ -69,7 +70,14 @@ public class TmInviteService {
 
         // Send email
         String html = renderInviteEmail(invite, inviteLink);
-        emailService.sendHtml(email, "You're invited to join " + applicationName, html);
+        try {
+            emailService.sendHtml(email, "You're invited to join " + applicationName, html);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Unable to send invitation email right now"
+            );
+        }
 
         log.info("Technician invite created for {} link={}", email, inviteLink);
         return inviteLink;
@@ -94,16 +102,30 @@ public class TmInviteService {
 
     // Handles render invite email.
     private String renderInviteEmail(TmUserInvite invite, String inviteLink) {
-        try {
-            ClassPathResource resource = new ClassPathResource("templates/invite-user.html");
-            String template = java.nio.file.Files.readString(resource.getFile().toPath());
-            String name = invite.getFirstName() == null ? invite.getEmail() : invite.getFirstName();
-            return template
-                    .replace("{{name}}", name)
-                    .replace("{{companyName}}", applicationName)
-                    .replace("{{inviteLink}}", inviteLink);
-        } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to load invite template");
+        String template = loadInviteTemplate();
+        String name = invite.getFirstName() == null ? invite.getEmail() : invite.getFirstName();
+        return template
+                .replace("{{name}}", name)
+                .replace("{{companyName}}", applicationName)
+                .replace("{{inviteLink}}", inviteLink);
+    }
+
+    // Loads invite template from classpath with a fallback.
+    private String loadInviteTemplate() {
+        ClassPathResource resource = new ClassPathResource("templates/invite-user.html");
+        if (!resource.exists()) {
+            return """
+                    <html><body>
+                    <p>Hello {{name}},</p>
+                    <p>You are invited to join {{companyName}}.</p>
+                    <p><a href="{{inviteLink}}">Set your password</a></p>
+                    </body></html>
+                    """;
+        }
+        try (java.io.InputStream stream = resource.getInputStream()) {
+            return new String(stream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Unable to load invite template");
         }
     }
 

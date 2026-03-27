@@ -15,11 +15,15 @@ import com.example.tm.auth.integration.eam.EamUserRepository;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.security.TmJwtService;
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -35,12 +39,19 @@ public class TmAuthService {
 
     private static final String ADMIN_ROLE_NAME = "Admin";
 
+    @Value("${app.auth.login.max-failed-attempts:5}")
+    private int maxFailedAttempts = 5;
+
+    @Value("${app.auth.login.block-seconds:900}")
+    private int blockSeconds = 900;
+
     private final TmUserRepository tmUserRepository;
     private final EamUserRepository eamUserRepository;
     private final EamUserCompanyRepository eamUserCompanyRepository;
     private final TmUserInviteRepository inviteRepository;
     private final TmJwtService tmJwtService;
     private final PasswordEncoder passwordEncoder;
+    private final ConcurrentMap<String, LoginAttemptState> loginAttemptByEmail = new ConcurrentHashMap<>();
 
     // Handles signup.
     @Transactional
@@ -69,29 +80,38 @@ public class TmAuthService {
     @Transactional
     public LoginResponseDto login(LoginRequestDto request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
-        EamUser eamUser = loadActiveEamUser(normalizedEmail);
-        List<EamCompany> companies = loadActiveCompanies(eamUser);
-        validateEamPassword(request.getPassword(), eamUser.getPassword());
+        enforceLoginRateLimit(normalizedEmail);
+        try {
+            EamUser eamUser = loadActiveEamUser(normalizedEmail);
+            List<EamCompany> companies = loadActiveCompanies(eamUser);
+            validateEamPassword(request.getPassword(), eamUser.getPassword());
 
-        TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
-                .map(existing -> resyncFromEam(existing, eamUser, normalizedEmail))
-                .orElseGet(() -> createFromEam(eamUser, normalizedEmail));
+            TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
+                    .map(existing -> resyncFromEam(existing, eamUser, normalizedEmail))
+                    .orElseGet(() -> createFromEam(eamUser, normalizedEmail));
 
-        validateUserStatus(user);
+            validateUserStatus(user);
 
-        String token = tmJwtService.generateAccessToken(user);
-        List<LoginResponseDto.CompanyDto> responseCompanies = companies.stream()
-                .map(this::toCompanyDto)
-                .toList();
-        boolean isAdmin = isAdmin(eamUser);
+            clearFailedLogin(normalizedEmail);
+            String token = tmJwtService.generateAccessToken(user);
+            List<LoginResponseDto.CompanyDto> responseCompanies = companies.stream()
+                    .map(this::toCompanyDto)
+                    .toList();
+            boolean isAdmin = isAdmin(eamUser);
 
-        return LoginResponseDto.builder()
-                .token(token)
-                .user(toUserSummary(user))
-                .companies(responseCompanies)
-                .isCompanySetup(isAdmin ? !responseCompanies.isEmpty() : null)
-                .mfaRequired(false)
-                .build();
+            return LoginResponseDto.builder()
+                    .token(token)
+                    .user(toUserSummary(user))
+                    .companies(responseCompanies)
+                    .isCompanySetup(isAdmin ? !responseCompanies.isEmpty() : null)
+                    .mfaRequired(false)
+                    .build();
+        } catch (ResponseStatusException ex) {
+            if (HttpStatus.UNAUTHORIZED.equals(ex.getStatusCode())) {
+                registerFailedLogin(normalizedEmail);
+            }
+            throw ex;
+        }
     }
 
     // Returns logged in users.
@@ -251,6 +271,60 @@ public class TmAuthService {
     private void rejectActiveInvite(String normalizedEmail) {
         if (inviteRepository.existsByEmailAndAcceptedFalseAndExpiresAtAfter(normalizedEmail, java.time.Instant.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "An invite is already pending for this email");
+        }
+    }
+
+    // Enforces login rate limit.
+    private void enforceLoginRateLimit(String normalizedEmail) {
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            return;
+        }
+        LoginAttemptState state = loginAttemptByEmail.get(normalizedEmail);
+        if (state == null) {
+            return;
+        }
+        if (state.blockedUntil != null && state.blockedUntil.isAfter(Instant.now())) {
+            throw new ResponseStatusException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "Too many failed login attempts. Please try again later."
+            );
+        }
+        if (state.blockedUntil != null && !state.blockedUntil.isAfter(Instant.now())) {
+            loginAttemptByEmail.remove(normalizedEmail);
+        }
+    }
+
+    // Registers failed login.
+    private void registerFailedLogin(String normalizedEmail) {
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            return;
+        }
+        loginAttemptByEmail.compute(normalizedEmail, (key, existing) -> {
+            LoginAttemptState current = existing == null ? new LoginAttemptState(0, null) : existing;
+            int failures = current.failedAttempts + 1;
+            Instant blockedUntil = failures >= maxFailedAttempts
+                    ? Instant.now().plusSeconds(blockSeconds)
+                    : null;
+            return new LoginAttemptState(failures, blockedUntil);
+        });
+    }
+
+    // Clears failed login state.
+    private void clearFailedLogin(String normalizedEmail) {
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            return;
+        }
+        loginAttemptByEmail.remove(normalizedEmail);
+    }
+
+    // Stores login attempt state.
+    private static final class LoginAttemptState {
+        private final int failedAttempts;
+        private final Instant blockedUntil;
+
+        private LoginAttemptState(int failedAttempts, Instant blockedUntil) {
+            this.failedAttempts = failedAttempts;
+            this.blockedUntil = blockedUntil;
         }
     }
 }

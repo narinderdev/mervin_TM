@@ -47,3 +47,5 @@ src/.env
 logs/
 
 src/main/java/com/example/eam1/*
+
+src/test/
