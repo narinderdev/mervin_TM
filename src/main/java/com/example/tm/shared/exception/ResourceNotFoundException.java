@@ -5,7 +5,7 @@ package com.example.tm.shared.exception;
  */
 public class ResourceNotFoundException extends RuntimeException {
 
-    // Creates a new instance of resource not found exception.
+    /** Creates a new instance of resource not found exception. */
     public ResourceNotFoundException(String message) {
         super(message);
     }

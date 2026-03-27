@@ -5,7 +5,7 @@ package com.example.tm.shared.exception;
  */
 public class ReferenceValidationException extends RuntimeException {
 
-    // Creates a new instance of reference validation exception.
+    /** Creates a new instance of reference validation exception. */
     public ReferenceValidationException(String message) {
         super(message);
     }

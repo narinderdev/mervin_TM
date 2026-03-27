@@ -68,7 +68,7 @@ public class TmInviteService {
 
         String inviteLink = getSetPasswordRedirectUrl(email);
 
-        // Send email
+        /** Send email */
         String html = renderInviteEmail(invite, inviteLink);
         try {
             emailService.sendHtml(email, "You're invited to join " + applicationName, html);
@@ -83,7 +83,7 @@ public class TmInviteService {
         return inviteLink;
     }
 
-    // Returns set password redirect url.
+    /** Returns set password redirect url. */
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
     public String getSetPasswordRedirectUrl(String email) {
         String encoded = java.net.URLEncoder.encode(normalize(email), java.nio.charset.StandardCharsets.UTF_8);
@@ -92,7 +92,7 @@ public class TmInviteService {
         return base + separator + "email=" + encoded;
     }
 
-    // Builds accept link.
+    /** Builds accept link. */
     private String buildAcceptLink(String email) {
         String encoded = java.net.URLEncoder.encode(normalize(email), java.nio.charset.StandardCharsets.UTF_8);
         String base = normalizeUrl(acceptUrl);
@@ -100,7 +100,7 @@ public class TmInviteService {
         return base + separator + "email=" + encoded;
     }
 
-    // Handles render invite email.
+    /** Handles render invite email. */
     private String renderInviteEmail(TmUserInvite invite, String inviteLink) {
         String template = loadInviteTemplate();
         String name = invite.getFirstName() == null ? invite.getEmail() : invite.getFirstName();
@@ -110,7 +110,7 @@ public class TmInviteService {
                 .replace("{{inviteLink}}", inviteLink);
     }
 
-    // Loads invite template from classpath with a fallback.
+    /** Loads invite template from classpath with a fallback. */
     private String loadInviteTemplate() {
         ClassPathResource resource = new ClassPathResource("templates/invite-user.html");
         if (!resource.exists()) {
@@ -129,14 +129,14 @@ public class TmInviteService {
         }
     }
 
-    // Validates invite.
+    /** Validates invite. */
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
     public void validateInvite(String email) {
         inviteRepository.findByEmailAndAcceptedFalseAndExpiresAtAfter(normalize(email), Instant.now())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Invite not found or expired"));
     }
 
-    // Sets password.
+    /** Sets password. */
     @Transactional(transactionManager = "tmTransactionManager")
     public void setPassword(SetPasswordDto dto) {
         String email = normalize(dto.getEmail());
@@ -160,12 +160,12 @@ public class TmInviteService {
         inviteRepository.save(invite);
     }
 
-    // Handles normalize.
+    /** Handles normalize. */
     private String normalize(String email) {
         return email == null ? null : email.trim().toLowerCase();
     }
 
-    // Normalizes url.
+    /** Normalizes url. */
     private String normalizeUrl(String url) {
         if (url == null) return "";
         return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;

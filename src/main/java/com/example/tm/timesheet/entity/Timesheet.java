@@ -67,13 +67,13 @@ public class Timesheet {
     @OneToMany(mappedBy = "timesheet", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetDay> timesheetDays = new ArrayList<>();
 
-    // Handles add day.
+    /** Handles add day. */
     public void addDay(TimesheetDay day) {
         day.setTimesheet(this);
         this.timesheetDays.add(day);
     }
 
-    // Handles clear days.
+    /** Handles clear days. */
     public void clearDays() {
         this.timesheetDays.forEach(day -> day.setTimesheet(null));
         this.timesheetDays.clear();

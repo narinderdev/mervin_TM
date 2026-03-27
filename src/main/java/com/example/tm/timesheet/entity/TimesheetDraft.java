@@ -55,13 +55,13 @@ public class TimesheetDraft {
     @OneToMany(mappedBy = "timesheetDraft", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetDraftDay> timesheetDays = new ArrayList<>();
 
-    // Handles add day.
+    /** Handles add day. */
     public void addDay(TimesheetDraftDay day) {
         day.setTimesheetDraft(this);
         this.timesheetDays.add(day);
     }
 
-    // Handles clear days.
+    /** Handles clear days. */
     public void clearDays() {
         this.timesheetDays.forEach(day -> day.setTimesheetDraft(null));
         this.timesheetDays.clear();

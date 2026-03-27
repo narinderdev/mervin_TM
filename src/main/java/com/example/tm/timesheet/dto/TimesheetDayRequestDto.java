@@ -35,42 +35,42 @@ public class TimesheetDayRequestDto {
     @JsonProperty("rows")
     private List<TimesheetRowRequestDto> rows;
 
-    // Returns date.
+    /** Returns date. */
     public LocalDate getDate() {
         return date;
     }
 
-    // Sets date.
+    /** Sets date. */
     public void setDate(LocalDate date) {
         this.date = date;
     }
 
-    // Returns day of week.
+    /** Returns day of week. */
     public String getDayOfWeek() {
         return dayOfWeek;
     }
 
-    // Sets day of week.
+    /** Sets day of week. */
     public void setDayOfWeek(String dayOfWeek) {
         this.dayOfWeek = dayOfWeek;
     }
 
-    // Returns daily total.
+    /** Returns daily total. */
     public BigDecimal getDailyTotal() {
         return dailyTotal;
     }
 
-    // Sets daily total.
+    /** Sets daily total. */
     public void setDailyTotal(BigDecimal dailyTotal) {
         this.dailyTotal = dailyTotal;
     }
 
-    // Returns rows.
+    /** Returns rows. */
     public List<TimesheetRowRequestDto> getRows() {
         return rows;
     }
 
-    // Sets rows.
+    /** Sets rows. */
     public void setRows(List<TimesheetRowRequestDto> rows) {
         this.rows = rows;
     }

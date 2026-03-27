@@ -21,7 +21,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
-    // Handles do filter internal.
+    /** Handles do filter internal. */
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,

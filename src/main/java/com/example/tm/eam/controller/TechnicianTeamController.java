@@ -32,7 +32,7 @@ public class TechnicianTeamController {
 
     private final EamLookupService eamLookupService;
 
-    // Creates technician team.
+    /** Creates technician team. */
     @PostMapping("/technician-teams")
     public ResponseEntity<ApiResponse<?>> createTechnicianTeam(
             @RequestParam("companyId") Long companyId,
@@ -46,7 +46,7 @@ public class TechnicianTeamController {
                 eamLookupService.createTechnicianTeam(requestBody)));
     }
 
-    // Returns technician team by id.
+    /** Returns technician team by id. */
     @GetMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> getTechnicianTeamById(
             @PathVariable("id") Long teamId,
@@ -59,7 +59,7 @@ public class TechnicianTeamController {
                 eamLookupService.getTechnicianTeamById(teamId, companyId)));
     }
 
-    // Handles patch technician team.
+    /** Handles patch technician team. */
     @PatchMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> patchTechnicianTeam(
             @PathVariable("id") Long teamId,
@@ -73,7 +73,7 @@ public class TechnicianTeamController {
                 eamLookupService.patchTechnicianTeam(teamId, companyId, requestBody)));
     }
 
-    // Deletes technician team.
+    /** Deletes technician team. */
     @DeleteMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> deleteTechnicianTeam(
             @PathVariable("id") Long teamId,
@@ -87,7 +87,7 @@ public class TechnicianTeamController {
                 null));
     }
 
-    // Returns technician teams.
+    /** Returns technician teams. */
     @GetMapping("/technician-teams")
     public ResponseEntity<ApiResponse<?>> getTechnicianTeams(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -99,7 +99,7 @@ public class TechnicianTeamController {
                 HttpStatus.OK.value(), "Technician teams fetched successfully", eamLookupService.getTechnicianTeams(page, size, companyId)));
     }
 
-    // Handles correlation id.
+    /** Handles correlation id. */
     private String correlationId(HttpServletRequest request) {
         Object fromRequest = request.getAttribute(HeaderConstants.CORRELATION_ID_HEADER);
         if (fromRequest instanceof String value && !value.isBlank()) {

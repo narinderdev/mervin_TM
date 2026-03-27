@@ -27,7 +27,7 @@ public class AuthController {
 
     private final TmAuthService tmAuthService;
 
-    // Handles login.
+    /** Handles login. */
     @PostMapping
     public ResponseEntity<ApiResponse<LoginResponseDto>> login(@Valid @RequestBody LoginRequestDto request) {
         LoginResponseDto data = tmAuthService.login(request);
@@ -36,7 +36,7 @@ public class AuthController {
         );
     }
 
-    // Handles signup.
+    /** Handles signup. */
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<UserSummaryDto>> signup(@Valid @RequestBody SignupRequestDto request) {
         UserSummaryDto data = tmAuthService.signup(request);
@@ -45,7 +45,7 @@ public class AuthController {
         );
     }
 
-    // Returns logged in users.
+    /** Returns logged in users. */
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getLoggedInUsers() {
         List<UserSummaryDto> data = tmAuthService.getLoggedInUsers();

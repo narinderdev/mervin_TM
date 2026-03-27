@@ -53,7 +53,7 @@ public class TmAuthService {
     private final PasswordEncoder passwordEncoder;
     private final ConcurrentMap<String, LoginAttemptState> loginAttemptByEmail = new ConcurrentHashMap<>();
 
-    // Handles signup.
+    /** Handles signup. */
     @Transactional
     public UserSummaryDto signup(SignupRequestDto request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
@@ -76,7 +76,7 @@ public class TmAuthService {
         return toUserSummary(saved);
     }
 
-    // Handles login.
+    /** Handles login. */
     @Transactional
     public LoginResponseDto login(LoginRequestDto request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
@@ -114,7 +114,7 @@ public class TmAuthService {
         }
     }
 
-    // Returns logged in users.
+    /** Returns logged in users. */
     @Transactional(readOnly = true)
     public List<UserSummaryDto> getLoggedInUsers() {
         return tmUserRepository.findByActiveTrue()
@@ -123,7 +123,7 @@ public class TmAuthService {
                 .collect(Collectors.toList());
     }
 
-    // Converts data to user summary.
+    /** Converts data to user summary. */
     private UserSummaryDto toUserSummary(TmUser user) {
         return UserSummaryDto.builder()
                 .id(user.getId())
@@ -135,19 +135,19 @@ public class TmAuthService {
                 .build();
     }
 
-    // Normalizes email.
+    /** Normalizes email. */
     private String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase();
     }
 
-    // Validates status.
+    /** Validates status. */
     private void validateUserStatus(TmUser user) {
         if (!Boolean.TRUE.equals(user.getActive())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
         }
     }
 
-    // Validates EAM password hash.
+    /** Validates EAM password hash. */
     private void validateEamPassword(String rawPassword, String eamPasswordHash) {
         if (eamPasswordHash == null || !passwordEncoder.matches(rawPassword, eamPasswordHash)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
@@ -169,7 +169,7 @@ public class TmAuthService {
         return tmUserRepository.save(user);
     }
 
-    // Re-syncs existing TM user fields from EAM.
+    /** Re-syncs existing TM user fields from EAM. */
     private TmUser resyncFromEam(TmUser existing, EamUser eamUser, String normalizedEmail) {
         String eamRole = resolveRole(eamUser).orElse("Technician");
         boolean changed = false;
@@ -198,7 +198,7 @@ public class TmAuthService {
         return changed ? tmUserRepository.save(existing) : existing;
     }
 
-    // Loads active eam user.
+    /** Loads active eam user. */
     private EamUser loadActiveEamUser(String normalizedEmail) {
         EamUser eamUser = eamUserRepository.findByEmailAndDeletedFalse(normalizedEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
@@ -209,7 +209,7 @@ public class TmAuthService {
         return eamUser;
     }
 
-    // Loads active companies.
+    /** Loads active companies. */
     private List<EamCompany> loadActiveCompanies(EamUser eamUser) {
         List<EamCompany> companies = eamUserCompanyRepository.findByUser_IdAndCompany_ActiveTrue(eamUser.getId())
                 .stream()
@@ -224,7 +224,7 @@ public class TmAuthService {
         return companies;
     }
 
-    // Converts data to company dto.
+    /** Converts data to company dto. */
     private LoginResponseDto.CompanyDto toCompanyDto(EamCompany company) {
         return LoginResponseDto.CompanyDto.builder()
                 .id(company.getId())
@@ -241,7 +241,7 @@ public class TmAuthService {
                 .build();
     }
 
-    // Resolves role.
+    /** Resolves role. */
     private Optional<String> resolveRole(EamUser eamUser) {
         return eamUser.getUserRoles() == null
                 ? Optional.empty()
@@ -254,7 +254,7 @@ public class TmAuthService {
                         .findFirst();
     }
 
-    // Checks whether admin.
+    /** Checks whether admin. */
     private boolean isAdmin(EamUser eamUser) {
         return eamUser.getUserRoles() != null
                 && eamUser.getUserRoles()
@@ -267,14 +267,14 @@ public class TmAuthService {
                         .anyMatch(roleName -> ADMIN_ROLE_NAME.equalsIgnoreCase(roleName));
     }
 
-    // Rejects active invite.
+    /** Rejects active invite. */
     private void rejectActiveInvite(String normalizedEmail) {
         if (inviteRepository.existsByEmailAndAcceptedFalseAndExpiresAtAfter(normalizedEmail, java.time.Instant.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "An invite is already pending for this email");
         }
     }
 
-    // Enforces login rate limit.
+    /** Enforces login rate limit. */
     private void enforceLoginRateLimit(String normalizedEmail) {
         if (normalizedEmail == null || normalizedEmail.isBlank()) {
             return;
@@ -294,7 +294,7 @@ public class TmAuthService {
         }
     }
 
-    // Registers failed login.
+    /** Registers failed login. */
     private void registerFailedLogin(String normalizedEmail) {
         if (normalizedEmail == null || normalizedEmail.isBlank()) {
             return;
@@ -309,7 +309,7 @@ public class TmAuthService {
         });
     }
 
-    // Clears failed login state.
+    /** Clears failed login state. */
     private void clearFailedLogin(String normalizedEmail) {
         if (normalizedEmail == null || normalizedEmail.isBlank()) {
             return;
@@ -317,7 +317,7 @@ public class TmAuthService {
         loginAttemptByEmail.remove(normalizedEmail);
     }
 
-    // Stores login attempt state.
+    /** Stores login attempt state. */
     private static final class LoginAttemptState {
         private final int failedAttempts;
         private final Instant blockedUntil;

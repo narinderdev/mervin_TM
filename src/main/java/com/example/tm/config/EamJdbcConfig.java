@@ -15,7 +15,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Configuration
 public class EamJdbcConfig {
 
-    // Handles eam data source.
+    /** Handles eam data source. */
     @Bean(name = "eamDataSource")
     public DataSource eamDataSource(Environment env) {
         String rawUrl = env.getProperty("spring.datasource.eam.jdbc-url");
@@ -34,19 +34,19 @@ public class EamJdbcConfig {
         config.setMaxLifetime(Long.parseLong(env.getProperty("spring.datasource.eam.max-lifetime", "1800000")));
         config.setValidationTimeout(Long.parseLong(env.getProperty("spring.datasource.eam.validation-timeout", "5000")));
         config.setAutoCommit(Boolean.parseBoolean(env.getProperty("spring.datasource.eam.auto-commit", "false")));
-        // Ensure we never fail on cert issues in lower environments; prod should use a trusted cert.
+        /** Ensure we never fail on cert issues in lower environments; prod should use a trusted cert. */
         config.addDataSourceProperty("trustServerCertificate", "true");
         config.addDataSourceProperty("encrypt", "false");
         return new HikariDataSource(config);
     }
 
-    // Handles eam jdbc template.
+    /** Handles eam jdbc template. */
     @Bean(name = "eamJdbcTemplate")
     public JdbcTemplate eamJdbcTemplate(@Qualifier("eamDataSource") DataSource eamDataSource) {
         return new JdbcTemplate(eamDataSource);
     }
 
-    // Handles enforce trust.
+    /** Handles enforce trust. */
     private String enforceTrust(String url) {
         if (url == null || url.isBlank()) {
             return url;

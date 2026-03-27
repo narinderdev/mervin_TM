@@ -17,12 +17,12 @@ public class ApiResponse<T> {
     private String message;
     private T data;
 
-    // Handles success response.
+    /** Handles success response. */
     public static <T> ApiResponse<T> successResponse(int statusCode, String message, T data) {
         return new ApiResponse<>(statusCode, "success", message, data);
     }
 
-    // Handles error response.
+    /** Handles error response. */
     public static <T> ApiResponse<T> errorResponse(int statusCode, String message) {
         return new ApiResponse<>(statusCode, "error", message, null);
     }

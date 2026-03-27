@@ -16,7 +16,7 @@ public class OpenApiConfig {
 
     private static final String SECURITY_SCHEME_NAME = "BearerAuth";
 
-    // Handles tm open api.
+    /** Handles tm open api. */
     @Bean
     public OpenAPI tmOpenApi() {
         return new OpenAPI()

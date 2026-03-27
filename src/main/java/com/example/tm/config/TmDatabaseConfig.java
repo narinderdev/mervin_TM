@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  */
 public class TmDatabaseConfig {
 
-    // Handles tm data source.
+    /** Handles tm data source. */
     @Bean(name = "tmDataSource")
     @Primary
     @ConfigurationProperties(prefix = "spring.datasource.tm")
@@ -44,7 +44,7 @@ public class TmDatabaseConfig {
                 .build();
     }
 
-    // Handles tm entity manager factory.
+    /** Handles tm entity manager factory. */
     @Bean(name = "tmEntityManagerFactory")
     @Primary
     public LocalContainerEntityManagerFactoryBean tmEntityManagerFactory(
@@ -76,7 +76,7 @@ public class TmDatabaseConfig {
         return factory;
     }
 
-    // Handles tm transaction manager.
+    /** Handles tm transaction manager. */
     @Bean(name = "tmTransactionManager")
     @Primary
     public PlatformTransactionManager tmTransactionManager(
@@ -84,7 +84,7 @@ public class TmDatabaseConfig {
         return new JpaTransactionManager(tmEntityManagerFactory);
     }
 
-    // Handles tm jdbc template.
+    /** Handles tm jdbc template. */
     @Bean(name = "tmJdbcTemplate")
     public JdbcTemplate tmJdbcTemplate(@Qualifier("tmDataSource") DataSource tmDataSource) {
         return new JdbcTemplate(tmDataSource);

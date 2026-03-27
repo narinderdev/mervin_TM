@@ -23,7 +23,7 @@ public class TmJwtService {
     private final Key key;
     private final long expirationMs;
 
-    // Creates a new instance of tm jwt service.
+    /** Creates a new instance of tm jwt service. */
     public TmJwtService(
             @Value("${app.jwt.secret:TM_Default_Change_Me_At_Least_32_Chars_Long_Secret}") String secret,
             @Value("${app.jwt.expiration-ms:86400000}") long expirationMs) {
@@ -31,7 +31,7 @@ public class TmJwtService {
         this.expirationMs = expirationMs;
     }
 
-    // Handles generate access token.
+    /** Handles generate access token. */
     public String generateAccessToken(TmUser user) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationMs);
@@ -51,7 +51,7 @@ public class TmJwtService {
                 .compact();
     }
 
-    // Handles parse claims.
+    /** Handles parse claims. */
     public Claims parseClaims(String token) {
         try {
             return Jwts.parserBuilder()
@@ -64,7 +64,7 @@ public class TmJwtService {
         }
     }
 
-    // Handles extract primary role.
+    /** Handles extract primary role. */
     public String extractPrimaryRole(String token) {
         Claims claims = parseClaims(token);
         Object rolesObj = claims.get("roles");

@@ -21,7 +21,7 @@ public class EamJdbcReadRepository implements EamReadRepository {
     @Qualifier("eamJdbcTemplate")
     private final JdbcTemplate eamJdbcTemplate;
 
-    // Handles technician exists.
+    /** Handles technician exists. */
     @Override
     public boolean technicianExists(Long technicianId) {
         Integer count = eamJdbcTemplate.queryForObject(TECHNICIAN_EXISTS_SQL, Integer.class, technicianId);

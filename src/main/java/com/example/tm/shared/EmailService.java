@@ -22,7 +22,7 @@ public class EmailService {
 
     private String fromEmail;
 
-    // Handles init.
+    /** Handles init. */
     @PostConstruct
     public void init() {
         this.fromEmail = environment.getProperty("spring.mail.username");
@@ -33,7 +33,7 @@ public class EmailService {
         }
     }
 
-    // Sends html.
+    /** Sends html. */
     public void sendHtml(String to, String subject, String html) {
         if (fromEmail == null || fromEmail.isBlank()) {
             throw new IllegalStateException("Mail credentials not configured (spring.mail.username/password).");

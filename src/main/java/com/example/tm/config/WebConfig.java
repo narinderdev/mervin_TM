@@ -19,7 +19,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Value("${app.cors.allowed-origin-patterns:https://*.ngrok-free.app,http://*.ngrok-free.app}")
     private String allowedOriginPatterns;
 
-    // Handles add cors mappings.
+    /** Handles add cors mappings. */
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -32,7 +32,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .maxAge(3600);
     }
 
-    // Resolves allowed origins.
+    /** Resolves allowed origins. */
     private List<String> resolveAllowedOrigins() {
         return Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
@@ -40,7 +40,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .toList();
     }
 
-    // Resolves allowed origin patterns.
+    /** Resolves allowed origin patterns. */
     private List<String> resolveAllowedOriginPatterns() {
         return Arrays.stream(allowedOriginPatterns.split(","))
                 .map(String::trim)

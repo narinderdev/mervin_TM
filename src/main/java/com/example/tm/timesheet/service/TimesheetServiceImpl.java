@@ -60,7 +60,7 @@ public class TimesheetServiceImpl implements TimesheetService {
     @Value("${timesheet.pay-period-grace-days:3}")
     private int payPeriodGraceDays;
 
-    // Handles create.
+    /** Handles create. */
     @Override
     public TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole) {
         requireActorRole(actorRole);
@@ -80,7 +80,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return toResponse(timesheetRepository.save(entity));
     }
 
-    // Saves draft.
+    /** Saves draft. */
     @Override
     public TimesheetResponseDto saveDraft(TimesheetRequestDto requestDto) {
         validateTechnicianId(requestDto.getTechnicianId());
@@ -101,7 +101,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return toDraftResponse(timesheetDraftRepository.save(draft));
     }
 
-    // Returns all.
+    /** Returns all. */
     @Override
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
     public List<TimesheetResponseDto> getAll() {
@@ -111,14 +111,14 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .toList();
     }
 
-    // Returns by id.
+    /** Returns by id. */
     @Override
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
     public TimesheetResponseDto getById(Long id) {
         return toResponse(findByIdOrThrow(id));
     }
 
-    // Handles update.
+    /** Handles update. */
     @Override
     public TimesheetResponseDto update(Long id, TimesheetRequestDto requestDto, String actorRole) {
         requireActorRole(actorRole);
@@ -145,7 +145,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return toResponse(timesheetRepository.save(existing));
     }
 
-    // Handles approve.
+    /** Handles approve. */
     @Override
     public TimesheetResponseDto approve(Long id) {
         Timesheet existing = findByIdOrThrow(id);
@@ -153,7 +153,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return toResponse(timesheetRepository.save(existing));
     }
 
-    // Sends back.
+    /** Sends back. */
     @Override
     public TimesheetResponseDto sendBack(Long id, String actorRole) {
         requireActorRole(actorRole);
@@ -168,7 +168,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return toResponse(timesheetRepository.save(existing));
     }
 
-    // Returns by technician.
+    /** Returns by technician. */
     @Override
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
     public List<TimesheetResponseDto> getByTechnician(Long technicianId) {
@@ -178,7 +178,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .toList();
     }
 
-    // Returns draft by technician and period.
+    /** Returns draft by technician and period. */
     @Override
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
     public TimesheetResponseDto getDraftByTechnicianAndPeriod(Long technicianId, LocalDate periodStartDate, LocalDate periodEndDate) {
@@ -203,7 +203,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return toDraftResponse(draft);
     }
 
-    // Returns recent entry by technician.
+    /** Returns recent entry by technician. */
     @Override
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
     public TimesheetRecentEntryResponseDto getRecentEntryByTechnician(Long technicianId) {
@@ -227,7 +227,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    // Handles delete.
+    /** Handles delete. */
     @Override
     public void delete(Long id, String actorRole) {
         requireActorRole(actorRole);
@@ -238,13 +238,13 @@ public class TimesheetServiceImpl implements TimesheetService {
         timesheetRepository.delete(existing);
     }
 
-    // Finds by id or throw.
+    /** Finds by id or throw. */
     private Timesheet findByIdOrThrow(Long id) {
         return timesheetRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Timesheet not found: " + id));
     }
 
-    // Populates entity.
+    /** Populates entity. */
     private void populateEntity(TimesheetRequestDto requestDto, Timesheet entity, String normalizedViewType) {
         entity.setPeriodStartDate(requestDto.getPeriodStartDate());
         entity.setPeriodEndDate(requestDto.getPeriodEndDate());
@@ -254,8 +254,8 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setTotalNonWorked(requestDto.getTotalNonWorked());
         entity.setTotalPremium(requestDto.getTotalPremium());
         entity.setSaveAsTemplate(Boolean.TRUE.equals(requestDto.getSaveAsTemplate()));
-        // For updates, remove existing days and flush so unique (timesheet_id, date) constraints
-        // are cleared before inserting replacement rows.
+        /** For updates, remove existing days and flush so unique (timesheet_id, date) constraints */
+        /** are cleared before inserting replacement rows. */
         if (entity.getId() != null && !entity.getTimesheetDays().isEmpty()) {
             entity.clearDays();
             timesheetRepository.saveAndFlush(entity);
@@ -272,7 +272,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         });
     }
 
-    // Populates draft entity.
+    /** Populates draft entity. */
     private void populateDraftEntity(TimesheetRequestDto requestDto, TimesheetDraft entity, String normalizedViewType) {
         entity.setPeriodStartDate(requestDto.getPeriodStartDate());
         entity.setPeriodEndDate(requestDto.getPeriodEndDate());
@@ -282,8 +282,8 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setTotalNonWorked(requestDto.getTotalNonWorked());
         entity.setTotalPremium(requestDto.getTotalPremium());
         entity.setSaveAsTemplate(Boolean.TRUE.equals(requestDto.getSaveAsTemplate()));
-        // For repeated draft saves, clear+flush old days before inserting replacements to
-        // avoid unique (timesheet_draft_id, date) conflicts.
+        /** For repeated draft saves, clear+flush old days before inserting replacements to */
+        /** avoid unique (timesheet_draft_id, date) conflicts. */
         if (entity.getId() != null && !entity.getTimesheetDays().isEmpty()) {
             entity.clearDays();
             timesheetDraftRepository.saveAndFlush(entity);
@@ -300,7 +300,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         });
     }
 
-    // Converts data to response.
+    /** Converts data to response. */
     private TimesheetResponseDto toResponse(Timesheet entity) {
         TmUser technician = entity.getTechnicianId() == null
                 ? null
@@ -340,7 +340,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    // Converts data to draft response.
+    /** Converts data to draft response. */
     private TimesheetResponseDto toDraftResponse(TimesheetDraft entity) {
         TmUser technician = entity.getTechnicianId() == null
                 ? null
@@ -384,7 +384,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    // Converts data to day entity.
+    /** Converts data to day entity. */
     private TimesheetDay toDayEntity(TimesheetDayRequestDto dayDto) {
         TimesheetDay day = new TimesheetDay();
         day.setDate(dayDto.getDate());
@@ -393,7 +393,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return day;
     }
 
-    // Converts data to draft day entity.
+    /** Converts data to draft day entity. */
     private TimesheetDraftDay toDraftDayEntity(TimesheetDayRequestDto dayDto) {
         TimesheetDraftDay day = new TimesheetDraftDay();
         day.setDate(dayDto.getDate());
@@ -402,7 +402,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return day;
     }
 
-    // Converts data to row entity.
+    /** Converts data to row entity. */
     private TimesheetRow toRowEntity(TimesheetDay day, TimesheetRowRequestDto rowDto) {
         TimesheetRow row = new TimesheetRow();
         row.setTimesheetDay(day);
@@ -419,7 +419,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return row;
     }
 
-    // Converts data to draft row entity.
+    /** Converts data to draft row entity. */
     private TimesheetDraftRow toDraftRowEntity(TimesheetDraftDay day, TimesheetRowRequestDto rowDto) {
         TimesheetDraftRow row = new TimesheetDraftRow();
         row.setTimesheetDraftDay(day);
@@ -436,7 +436,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return row;
     }
 
-    // Converts data to day response.
+    /** Converts data to day response. */
     private TimesheetDayResponseDto toDayResponse(TimesheetDay day) {
         return TimesheetDayResponseDto.builder()
                 .date(day.getDate())
@@ -446,7 +446,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    // Converts data to draft day response.
+    /** Converts data to draft day response. */
     private TimesheetDayResponseDto toDraftDayResponse(TimesheetDraftDay day) {
         return TimesheetDayResponseDto.builder()
                 .date(day.getDate())
@@ -456,7 +456,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    // Converts data to row response.
+    /** Converts data to row response. */
     private TimesheetRowResponseDto toRowResponse(TimesheetRow row) {
         return TimesheetRowResponseDto.builder()
                 .id(row.getId())
@@ -473,7 +473,7 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    // Converts data to draft row response.
+    /** Converts data to draft row response. */
     private TimesheetRowResponseDto toDraftRowResponse(TimesheetDraftRow row) {
         return TimesheetRowResponseDto.builder()
                 .id(row.getId())
@@ -490,11 +490,11 @@ public class TimesheetServiceImpl implements TimesheetService {
                 .build();
     }
 
-    // Rejects duplicate period.
+    /** Rejects duplicate period. */
     private void rejectDuplicatePeriod(Long technicianId, LocalDate start, LocalDate end, Long currentId) {
         boolean exists = timesheetRepository.existsByTechnicianIdAndPeriodStartDateAndPeriodEndDate(technicianId, start, end);
         if (exists) {
-            // If updating, allow the same record
+            /** If updating, allow the same record */
             if (currentId != null) {
                 Timesheet found = timesheetRepository.findById(currentId).orElse(null);
                 if (found != null
@@ -509,7 +509,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         }
     }
 
-    // Validates period range.
+    /** Validates period range. */
     private void validatePeriodRange(LocalDate periodStartDate, LocalDate periodEndDate, String viewType) {
         if (periodStartDate == null || periodEndDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "period_start_date and period_end_date are required");
@@ -548,7 +548,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         }
     }
 
-    // Validates day dates within period.
+    /** Validates day dates within period. */
     private void validateDayDatesWithinPeriod(TimesheetRequestDto requestDto) {
         LocalDate start = requestDto.getPeriodStartDate();
         LocalDate end = requestDto.getPeriodEndDate();
@@ -565,7 +565,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         });
     }
 
-    // Validates rows.
+    /** Validates rows. */
     private void validateRows(TimesheetRequestDto requestDto) {
         requestDto.getTimesheetDays().forEach(day -> day.getRows().forEach(row -> {
             row.setPayCode(trimToNull(row.getPayCode()));
@@ -575,14 +575,14 @@ public class TimesheetServiceImpl implements TimesheetService {
         }));
     }
 
-    // Validates technician id.
+    /** Validates technician id. */
     private void validateTechnicianId(Long technicianId) {
         if (technicianId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "technician_id is required");
         }
     }
 
-    // Validates current pay period.
+    /** Validates current pay period. */
     private void validateCurrentPayPeriod(LocalDate periodStartDate, LocalDate periodEndDate) {
         LocalDate today = LocalDate.now();
         if (today.isBefore(periodStartDate) || today.isAfter(periodEndDate)) {
@@ -592,7 +592,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         }
     }
 
-    // Rejects if locked by deadline.
+    /** Rejects if locked by deadline. */
     private void rejectIfLockedByDeadline(LocalDate deadlineDate) {
         if (deadlineDate == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "deadline_date could not be determined");
@@ -604,7 +604,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         }
     }
 
-    // Applies pay period dates.
+    /** Applies pay period dates. */
     private void applyPayPeriodDates(Timesheet entity) {
         LocalDate deadlineDate = computeDeadlineDate(entity.getPeriodEndDate());
         entity.setDeadlineDate(deadlineDate);
@@ -612,32 +612,32 @@ public class TimesheetServiceImpl implements TimesheetService {
         entity.setAdminUnlocked(Boolean.FALSE);
     }
 
-    // Computes deadline date.
+    /** Computes deadline date. */
     private LocalDate computeDeadlineDate(LocalDate periodEndDate) {
         int graceDays = Math.max(payPeriodGraceDays, 0);
         return periodEndDate.plusDays(graceDays);
     }
 
-    // Resolves deadline date.
+    /** Resolves deadline date. */
     private LocalDate resolveDeadlineDate(Timesheet entity) {
         return entity.getDeadlineDate() != null
                 ? entity.getDeadlineDate()
                 : computeDeadlineDate(entity.getPeriodEndDate());
     }
 
-    // Resolves lock date.
+    /** Resolves lock date. */
     private LocalDate resolveLockDate(Timesheet entity) {
         return entity.getLockDate() != null
                 ? entity.getLockDate()
                 : resolveDeadlineDate(entity).plusDays(1);
     }
 
-    // Resolves pay period status.
+    /** Resolves pay period status. */
     private String resolvePayPeriodStatus(Timesheet entity) {
         return LocalDate.now().isAfter(resolveDeadlineDate(entity)) ? "LOCKED" : "OPEN";
     }
 
-    // Normalizes view type.
+    /** Normalizes view type. */
     private String normalizeViewType(String viewType) {
         if (viewType == null || viewType.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "view_type is required");
@@ -651,7 +651,7 @@ public class TimesheetServiceImpl implements TimesheetService {
         return normalized;
     }
 
-    // Handles trim to null.
+    /** Handles trim to null. */
     private String trimToNull(String value) {
         if (value == null) {
             return null;
@@ -660,20 +660,20 @@ public class TimesheetServiceImpl implements TimesheetService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    // Validates actor role.
+    /** Validates actor role. */
     private void requireActorRole(String actorRole) {
         if (actorRole == null || actorRole.isBlank()) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Role claim not present in token");
         }
     }
 
-    // Checks whether technician role.
+    /** Checks whether technician role. */
     private boolean isTechnicianRole(String actorRole) {
         String normalized = actorRole == null ? "" : actorRole.trim().toUpperCase();
         return normalized.equals("TECHNICIAN") || normalized.contains("TECHNICIAN");
     }
 
-    // Checks whether admin role.
+    /** Checks whether admin role. */
     private boolean isAdminRole(String actorRole) {
         String normalized = actorRole == null ? "" : actorRole.trim().toUpperCase();
         return normalized.equals("ADMIN") || normalized.contains("ADMIN");

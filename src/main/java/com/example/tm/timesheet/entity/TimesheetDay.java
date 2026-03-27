@@ -47,13 +47,13 @@ public class TimesheetDay {
     @OneToMany(mappedBy = "timesheetDay", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetRow> rows = new ArrayList<>();
 
-    // Handles add row.
+    /** Handles add row. */
     public void addRow(TimesheetRow row) {
         row.setTimesheetDay(this);
         rows.add(row);
     }
 
-    // Handles clear rows.
+    /** Handles clear rows. */
     public void clearRows() {
         rows.forEach(r -> r.setTimesheetDay(null));
         rows.clear();

@@ -28,7 +28,7 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    // Handles handle reference validation.
+    /** Handles handle reference validation. */
     @ExceptionHandler(ReferenceValidationException.class)
     public ResponseEntity<ApiErrorResponse> handleReferenceValidation(
             ReferenceValidationException exception,
@@ -36,7 +36,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, exception.getMessage(), request);
     }
 
-    // Handles handle resource not found.
+    /** Handles handle resource not found. */
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleResourceNotFound(
             ResourceNotFoundException exception,
@@ -44,7 +44,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, exception.getMessage(), request);
     }
 
-    // Handles handle response status exception.
+    /** Handles handle response status exception. */
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<ApiErrorResponse> handleResponseStatusException(
             ResponseStatusException exception,
@@ -53,7 +53,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.valueOf(exception.getStatusCode().value()), message, request);
     }
 
-    // Handles handle method argument not valid.
+    /** Handles handle method argument not valid. */
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiErrorResponse> handleMethodArgumentNotValid(
             MethodArgumentNotValidException exception,
@@ -71,7 +71,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message, request);
     }
 
-    // Handles malformed request payload.
+    /** Handles malformed request payload. */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiErrorResponse> handleHttpMessageNotReadable(
             HttpMessageNotReadableException exception,
@@ -79,7 +79,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "Malformed request body", request);
     }
 
-    // Handles missing request parameter.
+    /** Handles missing request parameter. */
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ApiErrorResponse> handleMissingServletRequestParameter(
             MissingServletRequestParameterException exception,
@@ -87,7 +87,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "Missing required request parameter: " + exception.getParameterName(), request);
     }
 
-    // Handles invalid request parameter type conversion.
+    /** Handles invalid request parameter type conversion. */
     @ExceptionHandler(TypeMismatchException.class)
     public ResponseEntity<ApiErrorResponse> handleTypeMismatchException(
             TypeMismatchException exception,
@@ -95,7 +95,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "Invalid request parameter value", request);
     }
 
-    // Handles handle no resource found.
+    /** Handles handle no resource found. */
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleNoResourceFound(
             NoResourceFoundException exception,
@@ -103,7 +103,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, "Resource not found", request);
     }
 
-    // Handles handle database exception.
+    /** Handles handle database exception. */
     @ExceptionHandler({DataAccessException.class, SQLException.class})
     public ResponseEntity<ApiErrorResponse> handleDatabaseException(
             Exception exception,
@@ -117,7 +117,7 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Database operation failed", request);
     }
 
-    // Handles handle generic exception.
+    /** Handles handle generic exception. */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiErrorResponse> handleGenericException(
             Exception exception,
@@ -129,7 +129,7 @@ public class GlobalExceptionHandler {
         );
     }
 
-    // Builds error response.
+    /** Builds error response. */
     private ResponseEntity<ApiErrorResponse> buildErrorResponse(
             HttpStatus status,
             String message,
@@ -146,7 +146,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(body);
     }
 
-    // Handles extract correlation id.
+    /** Handles extract correlation id. */
     private String extractCorrelationId(HttpServletRequest request) {
         Object fromRequest = request.getAttribute(HeaderConstants.CORRELATION_ID_HEADER);
         if (fromRequest instanceof String value && !value.isBlank()) {
@@ -157,7 +157,7 @@ public class GlobalExceptionHandler {
         return fromHeader == null ? "" : fromHeader;
     }
 
-    // Converts data to field message.
+    /** Converts data to field message. */
     private String toFieldMessage(FieldError fieldError) {
         String defaultMessage = fieldError.getDefaultMessage() == null
                 ? "is invalid"

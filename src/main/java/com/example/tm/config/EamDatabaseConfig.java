@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  */
 public class EamDatabaseConfig {
 
-    // Handles eam entity manager factory.
+    /** Handles eam entity manager factory. */
     @Bean(name = "eamEntityManagerFactory")
     public LocalContainerEntityManagerFactoryBean eamEntityManagerFactory(
             @Qualifier("eamDataSource") DataSource eamDataSource,
@@ -45,7 +45,7 @@ public class EamDatabaseConfig {
         factory.setJpaVendorAdapter(vendorAdapter);
 
         Map<String, Object> properties = new HashMap<>();
-        // Avoid accidental schema modification on EAM DB
+        /** Avoid accidental schema modification on EAM DB */
         properties.put("hibernate.hbm2ddl.auto", "none");
         properties.put("hibernate.format_sql", environment.getProperty("spring.jpa.properties.hibernate.format_sql", "false"));
         String defaultSchema = environment.getProperty("spring.jpa.properties.hibernate.default_schema");
@@ -56,7 +56,7 @@ public class EamDatabaseConfig {
         return factory;
     }
 
-    // Handles eam transaction manager.
+    /** Handles eam transaction manager. */
     @Bean(name = "eamTransactionManager")
     public PlatformTransactionManager eamTransactionManager(
             @Qualifier("eamEntityManagerFactory") EntityManagerFactory eamEntityManagerFactory) {

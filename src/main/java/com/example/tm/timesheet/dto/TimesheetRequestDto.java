@@ -58,92 +58,92 @@ public class TimesheetRequestDto {
     @JsonAlias("saveAsTemplate")
     private Boolean saveAsTemplate;
 
-    // Returns period start date.
+    /** Returns period start date. */
     public LocalDate getPeriodStartDate() {
         return periodStartDate;
     }
 
-    // Sets period start date.
+    /** Sets period start date. */
     public void setPeriodStartDate(LocalDate periodStartDate) {
         this.periodStartDate = periodStartDate;
     }
 
-    // Returns period end date.
+    /** Returns period end date. */
     public LocalDate getPeriodEndDate() {
         return periodEndDate;
     }
 
-    // Sets period end date.
+    /** Sets period end date. */
     public void setPeriodEndDate(LocalDate periodEndDate) {
         this.periodEndDate = periodEndDate;
     }
 
-    // Returns view type.
+    /** Returns view type. */
     public String getViewType() {
         return viewType;
     }
 
-    // Sets view type.
+    /** Sets view type. */
     public void setViewType(String viewType) {
         this.viewType = viewType;
     }
 
-    // Returns technician id.
+    /** Returns technician id. */
     public Long getTechnicianId() {
         return technicianId;
     }
 
-    // Sets technician id.
+    /** Sets technician id. */
     public void setTechnicianId(Long technicianId) {
         this.technicianId = technicianId;
     }
 
-    // Returns total worked.
+    /** Returns total worked. */
     public BigDecimal getTotalWorked() {
         return totalWorked;
     }
 
-    // Sets total worked.
+    /** Sets total worked. */
     public void setTotalWorked(BigDecimal totalWorked) {
         this.totalWorked = totalWorked;
     }
 
-    // Returns total non worked.
+    /** Returns total non worked. */
     public BigDecimal getTotalNonWorked() {
         return totalNonWorked;
     }
 
-    // Sets total non worked.
+    /** Sets total non worked. */
     public void setTotalNonWorked(BigDecimal totalNonWorked) {
         this.totalNonWorked = totalNonWorked;
     }
 
-    // Returns total premium.
+    /** Returns total premium. */
     public BigDecimal getTotalPremium() {
         return totalPremium;
     }
 
-    // Sets total premium.
+    /** Sets total premium. */
     public void setTotalPremium(BigDecimal totalPremium) {
         this.totalPremium = totalPremium;
     }
 
-    // Returns timesheet days.
+    /** Returns timesheet days. */
     public List<TimesheetDayRequestDto> getTimesheetDays() {
         return timesheetDays;
     }
 
-    // Sets timesheet days.
+    /** Sets timesheet days. */
     public void setTimesheetDays(List<TimesheetDayRequestDto> timesheetDays) {
         this.timesheetDays = timesheetDays;
     }
 
-    // Returns save as template.
+    /** Returns save as template. */
     public Boolean getSaveAsTemplate() {
         return saveAsTemplate;
     }
 
-    // Sets save as template.
+    /** Sets save as template. */
     public void setSaveAsTemplate(Boolean saveAsTemplate) {
         this.saveAsTemplate = saveAsTemplate;
     }

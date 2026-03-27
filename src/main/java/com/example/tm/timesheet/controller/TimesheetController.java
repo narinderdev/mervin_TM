@@ -35,7 +35,7 @@ public class TimesheetController {
     private final TimesheetService timesheetService;
     private final TmJwtService tmJwtService;
 
-    // Handles create.
+    /** Handles create. */
     @PostMapping
     public ResponseEntity<TimesheetResponseDto> create(
             @Valid @RequestBody TimesheetRequestDto requestDto,
@@ -44,7 +44,7 @@ public class TimesheetController {
         return ResponseEntity.status(HttpStatus.CREATED).body(timesheetService.create(requestDto, actorRole));
     }
 
-    // Saves draft.
+    /** Saves draft. */
     @PostMapping("/drafts")
     public TimesheetResponseDto saveDraft(
             @RequestParam("technicianId") Long technicianId,
@@ -56,19 +56,19 @@ public class TimesheetController {
         return timesheetService.saveDraft(requestDto);
     }
 
-    // Returns all.
+    /** Returns all. */
     @GetMapping
     public List<TimesheetResponseDto> getAll() {
         return timesheetService.getAll();
     }
 
-    // Returns by id.
+    /** Returns by id. */
     @GetMapping("/{id}")
     public TimesheetResponseDto getById(@PathVariable Long id) {
         return timesheetService.getById(id);
     }
 
-    // Handles update.
+    /** Handles update. */
     @PutMapping("/{id}")
     public TimesheetResponseDto update(
             @PathVariable Long id,
@@ -78,13 +78,13 @@ public class TimesheetController {
         return timesheetService.update(id, requestDto, actorRole);
     }
 
-    // Returns by technician.
+    /** Returns by technician. */
     @GetMapping("/technicians/{technicianId}")
     public List<TimesheetResponseDto> getByTechnician(@PathVariable("technicianId") Long technicianId) {
         return timesheetService.getByTechnician(technicianId);
     }
 
-    // Returns draft by technician and period.
+    /** Returns draft by technician and period. */
     @GetMapping("/drafts/technicians/{technicianId}")
     public TimesheetResponseDto getDraftByTechnicianAndPeriod(
             @PathVariable("technicianId") Long technicianId,
@@ -93,19 +93,19 @@ public class TimesheetController {
         return timesheetService.getDraftByTechnicianAndPeriod(technicianId, periodStartDate, periodEndDate);
     }
 
-    // Returns recent entry by technician.
+    /** Returns recent entry by technician. */
     @GetMapping("/technicians/{technicianId}/recent-entry")
     public TimesheetRecentEntryResponseDto getRecentEntryByTechnician(@PathVariable("technicianId") Long technicianId) {
         return timesheetService.getRecentEntryByTechnician(technicianId);
     }
 
-    // Handles approve.
+    /** Handles approve. */
     @PostMapping("/{id}/approve")
     public TimesheetResponseDto approve(@PathVariable Long id) {
         return timesheetService.approve(id);
     }
 
-    // Sends back.
+    /** Sends back. */
     @PostMapping("/{id}/send-back")
     public TimesheetResponseDto sendBack(
             @PathVariable Long id,
@@ -114,7 +114,7 @@ public class TimesheetController {
         return timesheetService.sendBack(id, actorRole);
     }
 
-    // Handles delete.
+    /** Handles delete. */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @PathVariable Long id,
@@ -124,7 +124,7 @@ public class TimesheetController {
         return ResponseEntity.noContent().build();
     }
 
-    // Handles extract role from authorization header.
+    /** Handles extract role from authorization header. */
     private String extractRoleFromAuthorizationHeader(String authorizationHeader) {
         if (authorizationHeader == null || authorizationHeader.isBlank() || !authorizationHeader.startsWith("Bearer ")) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");

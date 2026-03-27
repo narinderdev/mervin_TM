@@ -25,7 +25,7 @@ public class InviteController {
 
     private final TmInviteService inviteService;
 
-    // Handles invite technician.
+    /** Handles invite technician. */
     @PostMapping("/technicians")
     public ResponseEntity<ApiResponse<String>> inviteTechnician(@Valid @RequestBody InviteTechnicianRequestDto request) {
         String inviteLink = inviteService.inviteTechnician(request);
@@ -36,7 +36,7 @@ public class InviteController {
         return ResponseEntity.ok(body);
     }
 
-    // Handles accept invite.
+    /** Handles accept invite. */
     @GetMapping("/accept")
     public ResponseEntity<Void> acceptInvite(@RequestParam String email) {
         inviteService.validateInvite(email);
@@ -44,7 +44,7 @@ public class InviteController {
         return ResponseEntity.status(HttpStatus.FOUND).header("Location", redirectUrl).build();
     }
 
-    // Sets password.
+    /** Sets password. */
     @PostMapping("/set-password")
     public ResponseEntity<ApiResponse<Void>> setPassword(@Valid @RequestBody SetPasswordDto dto) {
         inviteService.setPassword(dto);

@@ -30,7 +30,7 @@ public class DatabaseHealthLogger {
     @Value("${app.startup.db-check.enabled:true}")
     private boolean enabled;
 
-    // Handles on ready.
+    /** Handles on ready. */
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
         if (!enabled) {
@@ -41,7 +41,7 @@ public class DatabaseHealthLogger {
         check("EAM", eamDataSource);
     }
 
-    // Handles check.
+    /** Handles check. */
     private void check(String name, DataSource dataSource) {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement("SELECT 1");

@@ -32,7 +32,7 @@ public class TechnicianController {
 
     private final EamLookupService eamLookupService;
 
-    // Returns dashboard technicians.
+    /** Returns dashboard technicians. */
     @GetMapping("/dashboard/technicians")
     public ResponseEntity<ApiResponse<?>> getDashboardTechnicians(
             @RequestParam(value = "limit", required = false) Integer limit,
@@ -43,7 +43,7 @@ public class TechnicianController {
                 HttpStatus.OK.value(), "Technician dashboard fetched", eamLookupService.getDashboardTechnicians(limit, companyId)));
     }
 
-    // Creates technician.
+    /** Creates technician. */
     @PostMapping("/technicians")
     public ResponseEntity<ApiResponse<?>> createTechnician(
             @RequestParam("companyId") Long companyId,
@@ -57,7 +57,7 @@ public class TechnicianController {
                 eamLookupService.createTechnician(requestBody)));
     }
 
-    // Returns technician by id.
+    /** Returns technician by id. */
     @GetMapping("/technicians/{id}")
     public ResponseEntity<ApiResponse<?>> getTechnicianById(
             @PathVariable("id") Long technicianId,
@@ -70,7 +70,7 @@ public class TechnicianController {
                 eamLookupService.getTechnicianById(technicianId, companyId)));
     }
 
-    // Handles patch technician.
+    /** Handles patch technician. */
     @PatchMapping("/technicians/{id}")
     public ResponseEntity<ApiResponse<?>> patchTechnician(
             @PathVariable("id") Long technicianId,
@@ -84,7 +84,7 @@ public class TechnicianController {
                 eamLookupService.patchTechnician(technicianId, companyId, requestBody)));
     }
 
-    // Deletes technician.
+    /** Deletes technician. */
     @DeleteMapping("/technicians/{id}")
     public ResponseEntity<ApiResponse<?>> deleteTechnician(
             @PathVariable("id") Long technicianId,
@@ -98,7 +98,7 @@ public class TechnicianController {
                 null));
     }
 
-    // Returns technicians.
+    /** Returns technicians. */
     @GetMapping("/technicians")
     public ResponseEntity<ApiResponse<?>> getTechnicians(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -110,7 +110,7 @@ public class TechnicianController {
                 HttpStatus.OK.value(), "Technicians fetched successfully", eamLookupService.getTechnicians(page, size, companyId)));
     }
 
-    // Returns technician availability monthly.
+    /** Returns technician availability monthly. */
     @GetMapping("/technicians/{id}/availability/monthly")
     public ResponseEntity<ApiResponse<?>> getTechnicianAvailabilityMonthly(
             @PathVariable("id") Long technicianId,
@@ -124,7 +124,7 @@ public class TechnicianController {
                 eamLookupService.getTechnicianAvailabilityMonthly(technicianId, days, companyId)));
     }
 
-    // Returns technicians leaves.
+    /** Returns technicians leaves. */
     @GetMapping("/technicians/leaves")
     public ResponseEntity<ApiResponse<?>> getTechniciansLeaves(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -136,7 +136,7 @@ public class TechnicianController {
                 HttpStatus.OK.value(), "All technician leaves fetched successfully", eamLookupService.getTechniciansLeaves(page, size, companyId)));
     }
 
-    // Returns technician leaves.
+    /** Returns technician leaves. */
     @GetMapping("/technicians/{id}/leaves")
     public ResponseEntity<ApiResponse<?>> getTechnicianLeaves(
             @PathVariable("id") Long technicianId,
@@ -147,7 +147,7 @@ public class TechnicianController {
                 HttpStatus.OK.value(), "Technician leaves fetched successfully", eamLookupService.getTechnicianLeaves(technicianId, companyId)));
     }
 
-    // Returns technician leave by id.
+    /** Returns technician leave by id. */
     @GetMapping("/technicians/{id}/leaves/{leaveId}")
     public ResponseEntity<ApiResponse<?>> getTechnicianLeaveById(
             @PathVariable("id") Long technicianId,
@@ -159,7 +159,7 @@ public class TechnicianController {
                 HttpStatus.OK.value(), "Technician leave fetched successfully", eamLookupService.getTechnicianLeaveById(technicianId, leaveId, companyId)));
     }
 
-    // Handles correlation id.
+    /** Handles correlation id. */
     private String correlationId(HttpServletRequest request) {
         Object fromRequest = request.getAttribute(HeaderConstants.CORRELATION_ID_HEADER);
         if (fromRequest instanceof String value && !value.isBlank()) {
