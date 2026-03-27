@@ -14,10 +14,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/**
+ * Encapsulates correlation id filter functionality.
+ */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CorrelationIdFilter extends OncePerRequestFilter {
 
+    // Handles do filter internal.
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,

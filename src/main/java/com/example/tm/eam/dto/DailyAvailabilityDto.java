@@ -5,6 +5,9 @@ import java.util.List;
 import lombok.Builder;
 import lombok.Value;
 
+/**
+ * Transfers daily availability dto data between layers.
+ */
 @Value
 @Builder
 public class DailyAvailabilityDto {

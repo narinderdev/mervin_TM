@@ -13,6 +13,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates timesheet row functionality.
+ */
 @Getter
 @Setter
 @Entity

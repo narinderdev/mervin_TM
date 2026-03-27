@@ -6,6 +6,9 @@ import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import java.time.LocalDate;
 import java.util.List;
 
+/**
+ * Defines operations for timesheet service.
+ */
 public interface TimesheetService {
 
     TimesheetResponseDto create(TimesheetRequestDto requestDto, String actorRole);

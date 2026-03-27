@@ -8,11 +8,15 @@ import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/**
+ * Configures application components for open api config.
+ */
 @Configuration
 public class OpenApiConfig {
 
     private static final String SECURITY_SCHEME_NAME = "BearerAuth";
 
+    // Handles tm open api.
     @Bean
     public OpenAPI tmOpenApi() {
         return new OpenAPI()

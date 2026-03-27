@@ -4,6 +4,9 @@ import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * Transfers work order gl account list response data between layers.
+ */
 @Data
 @Builder
 public class WorkOrderGlAccountListResponse {

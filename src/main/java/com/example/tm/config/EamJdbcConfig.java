@@ -9,9 +9,13 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+/**
+ * Configures application components for eam jdbc config.
+ */
 @Configuration
 public class EamJdbcConfig {
 
+    // Handles eam data source.
     @Bean(name = "eamDataSource")
     public DataSource eamDataSource(Environment env) {
         String rawUrl = env.getProperty("spring.datasource.eam.jdbc-url");
@@ -36,11 +40,13 @@ public class EamJdbcConfig {
         return new HikariDataSource(config);
     }
 
+    // Handles eam jdbc template.
     @Bean(name = "eamJdbcTemplate")
     public JdbcTemplate eamJdbcTemplate(@Qualifier("eamDataSource") DataSource eamDataSource) {
         return new JdbcTemplate(eamDataSource);
     }
 
+    // Handles enforce trust.
     private String enforceTrust(String url) {
         if (url == null || url.isBlank()) {
             return url;

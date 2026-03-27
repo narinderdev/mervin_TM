@@ -33,6 +33,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Tests behavior of timesheet service impl test.
+ */
 @ExtendWith(MockitoExtension.class)
 class TimesheetServiceImplTest {
 
@@ -300,6 +303,7 @@ class TimesheetServiceImplTest {
         assertTrue(ex.getReason().contains("Only admin"));
     }
 
+    // Tests build request.
     private TimesheetRequestDto buildRequest(LocalDate start, LocalDate end, String viewType) {
         TimesheetRowRequestDto row = new TimesheetRowRequestDto();
         row.setPayCode("REG");

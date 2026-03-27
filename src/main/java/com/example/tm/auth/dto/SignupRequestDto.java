@@ -6,6 +6,9 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+/**
+ * Transfers signup request dto data between layers.
+ */
 @Data
 public class SignupRequestDto {
 

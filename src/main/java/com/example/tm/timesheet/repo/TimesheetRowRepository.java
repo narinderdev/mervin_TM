@@ -7,6 +7,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Defines operations for timesheet row repository.
+ */
 public interface TimesheetRowRepository extends JpaRepository<TimesheetRow, Long> {
 
     @Query("""

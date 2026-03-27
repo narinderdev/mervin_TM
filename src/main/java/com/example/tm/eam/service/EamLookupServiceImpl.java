@@ -42,14 +42,19 @@ import org.springframework.http.HttpStatus;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Implements service logic for eam lookup service impl.
+ */
 @Service
 public class EamLookupServiceImpl implements EamLookupService {
 
     private final JdbcTemplate jdbcTemplate;
     private final JdbcTemplate tmJdbcTemplate;
 
+    // Creates a new instance of eam lookup service impl.
     public EamLookupServiceImpl(
             @Qualifier("eamJdbcTemplate") JdbcTemplate jdbcTemplate,
             @Qualifier("tmJdbcTemplate") JdbcTemplate tmJdbcTemplate) {
@@ -57,6 +62,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         this.tmJdbcTemplate = tmJdbcTemplate;
     }
 
+    // Returns dashboard technicians.
     @Override
     public TechnicianDashboardResponse getDashboardTechnicians(Integer limit, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -166,7 +172,9 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Creates technician.
     @Override
+    @Transactional(transactionManager = "tmTransactionManager")
     public TechnicianDetailsResponse createTechnician(TechnicianCreateRequest request) {
         Long companyId = requireCompanyId(request.getCompanyId());
         ensureCompanyExistsInEam(companyId);
@@ -223,6 +231,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return getTechnicianById(technicianPk, companyId);
     }
 
+    // Returns technician by id.
     @Override
     public TechnicianDetailsResponse getTechnicianById(Long technicianId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -231,6 +240,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return mapTechnicianTm(row, safeCompanyId);
     }
 
+    // Handles patch technician.
     @Override
     public TechnicianDetailsResponse patchTechnician(Long technicianId, Long companyId, TechnicianPatchRequest request) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -314,6 +324,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return getTechnicianById(technicianId, safeCompanyId);
     }
 
+    // Deletes technician.
     @Override
     public void deleteTechnician(Long technicianId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -323,6 +334,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         tmJdbcTemplate.update("UPDATE technicians SET is_deleted = 1 WHERE id = ? AND company_id = ?", technicianId, safeCompanyId);
     }
 
+    // Returns technicians.
     @Override
     public TechnicianListResponse getTechnicians(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -355,6 +367,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns technician availability monthly.
     @Override
     public List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -363,6 +376,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return buildAvailability(technicianId, days, safeCompanyId);
     }
 
+    // Creates technician team.
     @Override
     public TechnicianTeamDetailsResponse createTechnicianTeam(TechnicianTeamCreateRequest request) {
         Long companyId = requireCompanyId(request.getCompanyId());
@@ -393,6 +407,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return getTechnicianTeamById(teamId, companyId);
     }
 
+    // Returns technician team by id.
     @Override
     public TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -401,6 +416,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return mapTeamTm(row, safeCompanyId);
     }
 
+    // Handles patch technician team.
     @Override
     public TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, Long companyId, TechnicianTeamPatchRequest request) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -432,6 +448,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return getTechnicianTeamById(teamId, safeCompanyId);
     }
 
+    // Deletes technician team.
     @Override
     public void deleteTechnicianTeam(Long teamId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -444,6 +461,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         tmJdbcTemplate.update("DELETE FROM technician_teams WHERE id = ? AND company_id = ?", teamId, safeCompanyId);
     }
 
+    // Returns technician teams.
     @Override
     public TechnicianTeamListResponse getTechnicianTeams(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -472,6 +490,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns work order numbers.
     @Override
     public WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -554,6 +573,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns capex work order numbers.
     @Override
     public WorkOrderNumberListResponse getCapexWorkOrderNumbers(int page, int size, Long technicianId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -656,6 +676,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns work order gl accounts.
     @Override
     public WorkOrderGlAccountListResponse getWorkOrderGlAccounts(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -714,6 +735,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns work order types.
     @Override
     public WorkOrderTypeListResponse getWorkOrderTypes(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -779,6 +801,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Resolves table columns.
     private List<String> resolveTableColumns(String tableName) {
         return jdbcTemplate.query("""
                         SELECT c.COLUMN_NAME
@@ -790,6 +813,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 tableName);
     }
 
+    // Resolves preferred order column.
     private String resolvePreferredOrderColumn(List<String> columns) {
         List<String> preferred = List.of("id", "work_order_type_id", "code", "name", "description");
         for (String candidate : preferred) {
@@ -802,10 +826,12 @@ public class EamLookupServiceImpl implements EamLookupService {
         return columns.get(0);
     }
 
+    // Handles quote identifier.
     private String quoteIdentifier(String identifier) {
         return "[" + identifier.replace("]", "]]") + "]";
     }
 
+    // Returns work request type property units.
     @Override
     public WorkRequestTypePropertyUnitListResponse getWorkRequestTypePropertyUnits(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -863,6 +889,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Resolves work request type property unit source.
     private PropertyUnitSource resolveWorkRequestTypePropertyUnitSource() {
         List<String> preferredTables = List.of(
                 "work_request_types",
@@ -918,6 +945,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return new PropertyUnitSource(asString(row.get("table_name")), asString(row.get("column_name")));
     }
 
+    // Returns work orders.
     @Override
     public WorkOrderListResponse getWorkOrders(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -954,6 +982,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns work order by id.
     @Override
     public WorkOrderDetailsResponse getWorkOrderById(Long workOrderId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -968,6 +997,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return mapWorkOrder(rows.get(0));
     }
 
+    // Handles add work order to favourites.
     @Override
     public WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -1004,6 +1034,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return workOrder;
     }
 
+    // Returns favourite work order numbers.
     private List<WorkOrderNumberOptionDto> getFavouriteWorkOrderNumbers(Long technicianId, boolean capexOnly, Long companyId) {
         if (technicianId == null) {
             return List.of();
@@ -1089,12 +1120,14 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .toList();
     }
 
+    // Handles supports capex work order filter.
     private boolean supportsCapexWorkOrderFilter() {
         return tableExists("work_order_types")
                 && columnExists("work_order_types", "cost_treatment")
                 && columnExists("work_orders", "work_order_type_id");
     }
 
+    // Returns holidays.
     @Override
     public TechnicianHolidayListResponse getHolidays(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -1133,6 +1166,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns holiday by id.
     @Override
     public TechnicianHolidayResponse getHolidayById(Long holidayId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -1155,6 +1189,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return mapHoliday(rows.get(0));
     }
 
+    // Returns technicians leaves.
     @Override
     public TechnicianLeaveListResponse getTechniciansLeaves(int page, int size, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -1189,6 +1224,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns technician leaves.
     @Override
     public TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -1209,6 +1245,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Returns technician leave by id.
     @Override
     public TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
@@ -1224,6 +1261,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return mapLeave(rows.get(0));
     }
 
+    // Returns technician row or throw.
     private Map<String, Object> getTechnicianRowOrThrow(Long technicianId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT id, technician_id, badge_number, first_name, last_name, full_name,
@@ -1240,6 +1278,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return rows.get(0);
     }
 
+    // Returns team row or throw.
     private Map<String, Object> getTeamRowOrThrow(Long teamId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
                 SELECT id, team_name, team_description, status, start_date, end_date, notes
@@ -1252,6 +1291,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return rows.get(0);
     }
 
+    // Handles ensure team name unique.
     private void ensureTeamNameUnique(String teamName, Long currentTeamId) {
         String sql = currentTeamId == null
                 ? "SELECT COUNT(1) FROM technician_teams WHERE LOWER(team_name) = LOWER(?)"
@@ -1264,6 +1304,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Applies team membership.
     private void applyTeamMembership(Long teamId, List<Long> technicianIds, Long requestedLeaderId) {
         boolean replaceMembership = technicianIds != null;
         if (!replaceMembership && requestedLeaderId == null) {
@@ -1299,6 +1340,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Synchronizes team technicians.
     private void syncTeamTechnicians(Long teamId,
                                      Set<Long> desiredIds,
                                      Long requestedLeaderId,
@@ -1352,6 +1394,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Updates leader only.
     private void updateLeaderOnly(List<Map<String, Object>> currentMembers, Long teamId, Long leaderId) {
         if (leaderId == null) {
             return;
@@ -1376,6 +1419,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Resolves leader id.
     private Long resolveLeaderId(Long requestedLeaderId, Set<Long> desiredIds, Map<Long, Boolean> currentMap) {
         if (requestedLeaderId != null) {
             return requestedLeaderId;
@@ -1388,6 +1432,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return null;
     }
 
+    // Handles fetch existing technician ids.
     private Set<Long> fetchExistingTechnicianIds(Set<Long> technicianIds) {
         if (technicianIds.isEmpty()) {
             return Set.of();
@@ -1402,6 +1447,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return ids;
     }
 
+    // Handles exists email for other technician.
     private boolean existsEmailForOtherTechnician(String email, Long currentTechnicianId) {
         String sql = currentTechnicianId == null
                 ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(email) = LOWER(?)"
@@ -1412,6 +1458,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return count > 0;
     }
 
+    // Validates badge unique.
     private String requireBadgeUnique(String badgeNumber, Long currentTechnicianId) {
         String trimmed = requireNonBlank(badgeNumber, "badgeNumber is required");
         String sql = currentTechnicianId == null
@@ -1426,6 +1473,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return trimmed;
     }
 
+    // Handles ensure technician id unique.
     private void ensureTechnicianIdUnique(String technicianId, Long currentTechnicianId) {
         String sql = currentTechnicianId == null
                 ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND LOWER(technician_id) = LOWER(?)"
@@ -1438,6 +1486,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Handles determine technician id.
     private String determineTechnicianId(String providedTechnicianId, Long currentTechnicianId) {
         if (providedTechnicianId != null && !providedTechnicianId.isBlank()) {
             String trimmed = providedTechnicianId.trim();
@@ -1460,6 +1509,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate technicianId");
     }
 
+    // Returns technician row or throw tm.
     private Map<String, Object> getTechnicianRowOrThrowTm(Long technicianId, Long companyId) {
         List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
                 SELECT id, company_id, technician_id, badge_number, first_name, last_name, full_name,
@@ -1476,6 +1526,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return rows.get(0);
     }
 
+    // Returns team row or throw tm.
     private Map<String, Object> getTeamRowOrThrowTm(Long teamId, Long companyId) {
         List<Map<String, Object>> rows = tmJdbcTemplate.queryForList("""
                 SELECT id, company_id, team_name, team_description, status, start_date, end_date, notes
@@ -1488,6 +1539,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return rows.get(0);
     }
 
+    // Handles ensure team name unique tm.
     private void ensureTeamNameUniqueTm(String teamName, Long currentTeamId, Long companyId) {
         String sql = currentTeamId == null
                 ? "SELECT COUNT(1) FROM technician_teams WHERE company_id = ? AND LOWER(team_name) = LOWER(?)"
@@ -1500,6 +1552,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Applies team membership tm.
     private void applyTeamMembershipTm(Long teamId, Long companyId, List<Long> technicianIds, Long requestedLeaderId) {
         boolean replaceMembership = technicianIds != null;
         if (!replaceMembership && requestedLeaderId == null) {
@@ -1535,6 +1588,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Synchronizes team technicians tm.
     private void syncTeamTechniciansTm(Long teamId,
                                        Long companyId,
                                        Set<Long> desiredIds,
@@ -1589,6 +1643,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Updates leader only tm.
     private void updateLeaderOnlyTm(List<Map<String, Object>> currentMembers, Long teamId, Long leaderId) {
         if (leaderId == null) {
             return;
@@ -1613,6 +1668,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Handles fetch existing technician ids tm.
     private Set<Long> fetchExistingTechnicianIdsTm(Set<Long> technicianIds, Long companyId) {
         if (technicianIds.isEmpty()) {
             return Set.of();
@@ -1633,6 +1689,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return ids;
     }
 
+    // Handles exists email for other technician tm.
     private boolean existsEmailForOtherTechnicianTm(String email, Long currentTechnicianId, Long companyId) {
         String sql = currentTechnicianId == null
                 ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(email) = LOWER(?)"
@@ -1643,6 +1700,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return count > 0;
     }
 
+    // Validates badge unique tm.
     private String requireBadgeUniqueTm(String badgeNumber, Long currentTechnicianId, Long companyId) {
         String trimmed = requireNonBlank(badgeNumber, "badgeNumber is required");
         String sql = currentTechnicianId == null
@@ -1657,6 +1715,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return trimmed;
     }
 
+    // Handles ensure technician id unique tm.
     private void ensureTechnicianIdUniqueTm(String technicianId, Long currentTechnicianId, Long companyId) {
         String sql = currentTechnicianId == null
                 ? "SELECT COUNT(1) FROM technicians WHERE is_deleted = 0 AND company_id = ? AND LOWER(technician_id) = LOWER(?)"
@@ -1669,6 +1728,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Handles determine technician id tm.
     private String determineTechnicianIdTm(String providedTechnicianId, Long currentTechnicianId, Long companyId) {
         if (providedTechnicianId != null && !providedTechnicianId.isBlank()) {
             String trimmed = providedTechnicianId.trim();
@@ -1691,6 +1751,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Unable to generate technicianId");
     }
 
+    // Handles ensure technician exists tm.
     private void ensureTechnicianExistsTm(Long technicianId, Long companyId) {
         long count = queryLongTm("SELECT COUNT(1) FROM technicians WHERE id = ? AND company_id = ? AND is_deleted = 0", technicianId, companyId);
         if (count == 0) {
@@ -1698,6 +1759,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Handles ensure technician exists tm.
     private void ensureTechnicianExistsTm(Long technicianId) {
         long count = queryLongTm("SELECT COUNT(1) FROM technicians WHERE id = ? AND is_deleted = 0", technicianId);
         if (count == 0) {
@@ -1705,6 +1767,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Validates company id.
     private Long requireCompanyId(Long companyId) {
         if (companyId == null || companyId <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "companyId is required");
@@ -1712,6 +1775,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return companyId;
     }
 
+    // Handles ensure company exists in eam.
     private void ensureCompanyExistsInEam(Long companyId) {
         long count = queryLong("SELECT COUNT(1) FROM companies WHERE id = ? AND active = 1", companyId);
         if (count == 0) {
@@ -1719,11 +1783,13 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Handles query long tm.
     private long queryLongTm(String sql, Object... args) {
         Number value = tmJdbcTemplate.queryForObject(sql, Number.class, args);
         return value == null ? 0L : value.longValue();
     }
 
+    // Resolves termination date.
     private LocalDate resolveTerminationDate(String technicianType, LocalDate terminationDate) {
         if ("CONTRACT".equalsIgnoreCase(technicianType)) {
             return terminationDate;
@@ -1734,6 +1800,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return null;
     }
 
+    // Validates non blank.
     private String requireNonBlank(String value, String message) {
         if (value == null || value.trim().isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
@@ -1741,6 +1808,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return value.trim();
     }
 
+    // Handles safe trim.
     private String safeTrim(String value) {
         if (value == null) {
             return null;
@@ -1749,6 +1817,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    // Normalizes upper default.
     private String normalizeUpperDefault(String value, String fallback) {
         String resolved = safeTrim(value);
         if (resolved == null) {
@@ -1757,6 +1826,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return resolved.toUpperCase();
     }
 
+    // Maps data to activity.
     private TechnicianActivityDto mapActivity(Map<String, Object> row) {
         String status = asString(row.get("status"));
         String workOrderId = asString(row.get("work_order_id"));
@@ -1782,6 +1852,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Handles work order select.
     private String workOrderSelect() {
         return """
                 SELECT wo.id, wo.work_order_number, wo.work_order_id, wo.work_request_type_id,
@@ -1800,6 +1871,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 """;
     }
 
+    // Handles leaves select.
     private String leavesSelect() {
         return """
                 SELECT l.id, l.technician_id, l.start_date, l.end_date, l.reason, l.created_at,
@@ -1810,6 +1882,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 """;
     }
 
+    // Maps data to technician tm.
     private TechnicianDetailsResponse mapTechnicianTm(Map<String, Object> row, Long companyId) {
         Long technicianId = asLong(row.get("id"));
         List<TechnicianTeamMembershipResponse> memberships = tmJdbcTemplate.queryForList("""
@@ -1867,6 +1940,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Maps data to team tm.
     private TechnicianTeamDetailsResponse mapTeamTm(Map<String, Object> row, Long companyId) {
         Long teamId = asLong(row.get("id"));
         List<Map<String, Object>> technicianRows = tmJdbcTemplate.queryForList("""
@@ -1912,6 +1986,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Maps data to technician.
     private TechnicianDetailsResponse mapTechnician(Map<String, Object> row) {
         Long technicianId = asLong(row.get("id"));
         List<TechnicianTeamMembershipResponse> memberships = jdbcTemplate.queryForList("""
@@ -1982,6 +2057,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Builds availability.
     private List<DailyAvailabilityDto> buildAvailability(Long technicianId, Integer days, Long companyId) {
         int horizon = days == null ? 31 : Math.max(days, 1);
         LocalDate start = LocalDate.now();
@@ -2103,6 +2179,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return response;
     }
 
+    // Maps data to team.
     private TechnicianTeamDetailsResponse mapTeam(Map<String, Object> row) {
         Long teamId = asLong(row.get("id"));
         List<Map<String, Object>> technicianRows = jdbcTemplate.queryForList("""
@@ -2157,6 +2234,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Maps data to work order.
     private WorkOrderDetailsResponse mapWorkOrder(Map<String, Object> row) {
         return WorkOrderDetailsResponse.builder()
                 .id(asLong(row.get("id")))
@@ -2187,6 +2265,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Maps data to holiday.
     private TechnicianHolidayResponse mapHoliday(Map<String, Object> row) {
         return TechnicianHolidayResponse.builder()
                 .id(asLong(row.get("id")))
@@ -2198,6 +2277,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Maps data to leave.
     private TechnicianLeaveResponse mapLeave(Map<String, Object> row) {
         return TechnicianLeaveResponse.builder()
                 .id(asLong(row.get("id")))
@@ -2210,6 +2290,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Handles ensure technician exists.
     private void ensureTechnicianExists(Long technicianId) {
         long count = queryLong("SELECT COUNT(1) FROM technicians WHERE id = ? AND is_deleted = 0", technicianId);
         if (count == 0) {
@@ -2217,19 +2298,23 @@ public class EamLookupServiceImpl implements EamLookupService {
         }
     }
 
+    // Handles query long.
     private long queryLong(String sql, Object... args) {
         Number value = jdbcTemplate.queryForObject(sql, Number.class, args);
         return value == null ? 0L : value.longValue();
     }
 
+    // Checks whether company id column.
     private boolean hasCompanyIdColumn(String tableName) {
         return columnExists(tableName, "company_id");
     }
 
+    // Checks whether tm company id column.
     private boolean hasTmCompanyIdColumn(String tableName) {
         return columnExistsTm(tableName, "company_id");
     }
 
+    // Handles column exists.
     private boolean columnExists(String tableName, String columnName) {
         long count = queryLong("""
                 SELECT COUNT(1)
@@ -2240,6 +2325,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return count > 0;
     }
 
+    // Handles column exists tm.
     private boolean columnExistsTm(String tableName, String columnName) {
         long count = queryLongTm("""
                 SELECT COUNT(1)
@@ -2250,6 +2336,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return count > 0;
     }
 
+    // Handles table exists.
     private boolean tableExists(String tableName) {
         long count = queryLong("""
                 SELECT COUNT(1)
@@ -2260,12 +2347,14 @@ public class EamLookupServiceImpl implements EamLookupService {
         return count > 0;
     }
 
+    // Handles append arg.
     private Object[] appendArg(Object[] source, Object extraArg) {
         Object[] args = java.util.Arrays.copyOf(source, source.length + 1);
         args[source.length] = extraArg;
         return args;
     }
 
+    // Handles format time ago.
     private String formatTimeAgo(LocalDateTime value) {
         if (value == null) {
             return "just now";
@@ -2285,6 +2374,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return days == 1 ? "1 day ago" : days + " days ago";
     }
 
+    // Handles merge.
     private List<Window> merge(List<Window> input) {
         if (input.isEmpty()) {
             return List.of();
@@ -2305,6 +2395,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return merged;
     }
 
+    // Handles free.
     private List<Window> free(LocalDateTime rangeStart, LocalDateTime rangeEnd, List<Window> busy) {
         List<Window> free = new ArrayList<>();
         LocalDateTime cursor = rangeStart;
@@ -2322,6 +2413,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return free;
     }
 
+    // Handles window map.
     private TimeWindowDto windowMap(LocalTime start, LocalTime end) {
         return TimeWindowDto.builder()
                 .start(start)
@@ -2329,6 +2421,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                 .build();
     }
 
+    // Handles truthy.
     private boolean truthy(Object value) {
         if (value == null) {
             return false;
@@ -2342,10 +2435,12 @@ public class EamLookupServiceImpl implements EamLookupService {
         return "true".equalsIgnoreCase(String.valueOf(value)) || "1".equals(String.valueOf(value));
     }
 
+    // Handles as string.
     private String asString(Object value) {
         return value == null ? null : String.valueOf(value);
     }
 
+    // Handles as long.
     private Long asLong(Object value) {
         if (value == null) {
             return null;
@@ -2356,6 +2451,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return Long.parseLong(String.valueOf(value));
     }
 
+    // Handles as local date.
     private LocalDate asLocalDate(Object value) {
         if (value == null) {
             return null;
@@ -2372,6 +2468,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return LocalDate.parse(String.valueOf(value));
     }
 
+    // Handles as local date time.
     private LocalDateTime asLocalDateTime(Object value) {
         if (value == null) {
             return null;
@@ -2388,6 +2485,7 @@ public class EamLookupServiceImpl implements EamLookupService {
         return LocalDateTime.parse(String.valueOf(value));
     }
 
+    // Resolves full name.
     private String resolveFullName(String fullName, String firstName, String lastName) {
         if (fullName != null && !fullName.isBlank()) {
             return fullName;

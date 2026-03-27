@@ -4,6 +4,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Transfers accept invite request dto data between layers.
+ */
 @Getter
 @Setter
 public class AcceptInviteRequestDto {

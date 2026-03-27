@@ -21,8 +21,12 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
         basePackages = "com.example.tm.auth.integration.eam",
         entityManagerFactoryRef = "eamEntityManagerFactory",
         transactionManagerRef = "eamTransactionManager")
+/**
+ * Configures application components for eam database config.
+ */
 public class EamDatabaseConfig {
 
+    // Handles eam entity manager factory.
     @Bean(name = "eamEntityManagerFactory")
     public LocalContainerEntityManagerFactoryBean eamEntityManagerFactory(
             @Qualifier("eamDataSource") DataSource eamDataSource,
@@ -52,6 +56,7 @@ public class EamDatabaseConfig {
         return factory;
     }
 
+    // Handles eam transaction manager.
     @Bean(name = "eamTransactionManager")
     public PlatformTransactionManager eamTransactionManager(
             @Qualifier("eamEntityManagerFactory") EntityManagerFactory eamEntityManagerFactory) {

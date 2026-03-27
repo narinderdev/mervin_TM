@@ -12,6 +12,9 @@ import com.example.tm.eam.dto.WorkOrderDetailsResponse;
 import com.example.tm.eam.dto.WorkOrderListResponse;
 import java.util.List;
 
+/**
+ * Defines operations for eam lookup repository.
+ */
 public interface EamLookupRepository {
 
     TechnicianDashboardResponse getTechnicianDashboard(Integer limit, Long companyId);

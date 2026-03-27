@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Value;
 
+/**
+ * Transfers technician holiday response data between layers.
+ */
 @Value
 @Builder
 public class TechnicianHolidayResponse {

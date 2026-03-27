@@ -5,6 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+/**
+ * Defines operations for eam user repository.
+ */
 public interface EamUserRepository extends JpaRepository<EamUser, Long> {
 
     @Query("select distinct u from EamUser u left join fetch u.userRoles ur left join fetch ur.role r where lower(u.email) = lower(:email) and (u.deleted = false or u.deleted is null)")

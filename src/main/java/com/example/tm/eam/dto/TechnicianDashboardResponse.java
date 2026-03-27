@@ -4,6 +4,9 @@ import java.util.List;
 import lombok.Builder;
 import lombok.Value;
 
+/**
+ * Transfers technician dashboard response data between layers.
+ */
 @Value
 @Builder
 public class TechnicianDashboardResponse {

@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Exposes API endpoints for auth controller.
+ */
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ public class AuthController {
 
     private final TmAuthService tmAuthService;
 
+    // Handles login.
     @PostMapping
     public ResponseEntity<ApiResponse<LoginResponseDto>> login(@Valid @RequestBody LoginRequestDto request) {
         LoginResponseDto data = tmAuthService.login(request);
@@ -32,6 +36,7 @@ public class AuthController {
         );
     }
 
+    // Handles signup.
     @PostMapping("/signup")
     public ResponseEntity<ApiResponse<UserSummaryDto>> signup(@Valid @RequestBody SignupRequestDto request) {
         UserSummaryDto data = tmAuthService.signup(request);
@@ -40,6 +45,7 @@ public class AuthController {
         );
     }
 
+    // Returns logged in users.
     @GetMapping("/users")
     public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getLoggedInUsers() {
         List<UserSummaryDto> data = tmAuthService.getLoggedInUsers();

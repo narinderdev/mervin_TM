@@ -6,6 +6,9 @@ import java.math.BigDecimal;
 import lombok.Builder;
 import lombok.Getter;
 
+/**
+ * Transfers timesheet recent entry response dto data between layers.
+ */
 @Getter
 @Builder
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

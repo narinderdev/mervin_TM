@@ -18,6 +18,9 @@ import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates timesheet day functionality.
+ */
 @Getter
 @Setter
 @Entity
@@ -44,11 +47,13 @@ public class TimesheetDay {
     @OneToMany(mappedBy = "timesheetDay", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetRow> rows = new ArrayList<>();
 
+    // Handles add row.
     public void addRow(TimesheetRow row) {
         row.setTimesheetDay(this);
         rows.add(row);
     }
 
+    // Handles clear rows.
     public void clearRows() {
         rows.forEach(r -> r.setTimesheetDay(null));
         rows.clear();

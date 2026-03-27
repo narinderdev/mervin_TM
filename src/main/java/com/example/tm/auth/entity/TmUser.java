@@ -12,6 +12,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates tm user functionality.
+ */
 @Getter
 @Setter
 @Entity

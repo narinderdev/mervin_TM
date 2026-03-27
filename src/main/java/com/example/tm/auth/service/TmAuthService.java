@@ -26,6 +26,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+/**
+ * Contains business logic for tm auth service.
+ */
 @Service
 @RequiredArgsConstructor
 public class TmAuthService {
@@ -39,6 +42,7 @@ public class TmAuthService {
     private final TmJwtService tmJwtService;
     private final PasswordEncoder passwordEncoder;
 
+    // Handles signup.
     @Transactional
     public UserSummaryDto signup(SignupRequestDto request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
@@ -61,16 +65,19 @@ public class TmAuthService {
         return toUserSummary(saved);
     }
 
+    // Handles login.
     @Transactional
     public LoginResponseDto login(LoginRequestDto request) {
         String normalizedEmail = normalizeEmail(request.getEmail());
         EamUser eamUser = loadActiveEamUser(normalizedEmail);
         List<EamCompany> companies = loadActiveCompanies(eamUser);
+        validateEamPassword(request.getPassword(), eamUser.getPassword());
 
         TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
-                .orElseGet(() -> syncFromEam(eamUser, normalizedEmail, request.getPassword()));
+                .map(existing -> resyncFromEam(existing, eamUser, normalizedEmail))
+                .orElseGet(() -> createFromEam(eamUser, normalizedEmail));
 
-        validatePasswordAndStatus(request.getPassword(), user);
+        validateUserStatus(user);
 
         String token = tmJwtService.generateAccessToken(user);
         List<LoginResponseDto.CompanyDto> responseCompanies = companies.stream()
@@ -87,6 +94,7 @@ public class TmAuthService {
                 .build();
     }
 
+    // Returns logged in users.
     @Transactional(readOnly = true)
     public List<UserSummaryDto> getLoggedInUsers() {
         return tmUserRepository.findByActiveTrue()
@@ -95,6 +103,7 @@ public class TmAuthService {
                 .collect(Collectors.toList());
     }
 
+    // Converts data to user summary.
     private UserSummaryDto toUserSummary(TmUser user) {
         return UserSummaryDto.builder()
                 .id(user.getId())
@@ -106,40 +115,70 @@ public class TmAuthService {
                 .build();
     }
 
+    // Normalizes email.
     private String normalizeEmail(String email) {
         return email == null ? null : email.trim().toLowerCase();
     }
 
-    private void validatePasswordAndStatus(String rawPassword, TmUser user) {
+    // Validates status.
+    private void validateUserStatus(TmUser user) {
         if (!Boolean.TRUE.equals(user.getActive())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
         }
-        if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+    }
+
+    // Validates EAM password hash.
+    private void validateEamPassword(String rawPassword, String eamPasswordHash) {
+        if (eamPasswordHash == null || !passwordEncoder.matches(rawPassword, eamPasswordHash)) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
     }
 
     /**
-     * If the user exists in EAM but not yet in TM, create/sync a TM user using the
-     * same hashed password. This lets EAM users log into TM without resetting passwords.
+     * If the user exists in EAM but not yet in TM, create a TM user from EAM.
      */
-    private TmUser syncFromEam(EamUser eamUser, String normalizedEmail, String rawPassword) {
-        String eamPasswordHash = eamUser.getPassword();
-        if (eamPasswordHash == null || !passwordEncoder.matches(rawPassword, eamPasswordHash)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
-        }
-
+    private TmUser createFromEam(EamUser eamUser, String normalizedEmail) {
         TmUser user = new TmUser();
         user.setFirstName(eamUser.getFirstName());
         user.setLastName(eamUser.getLastName());
         user.setEmail(normalizedEmail);
-        user.setPasswordHash(eamPasswordHash); // already bcrypt-hashed in EAM
+        user.setPasswordHash(eamUser.getPassword()); // already bcrypt-hashed in EAM
         user.setRole(resolveRole(eamUser).orElse("Technician"));
         user.setActive(true);
 
         return tmUserRepository.save(user);
     }
 
+    // Re-syncs existing TM user fields from EAM.
+    private TmUser resyncFromEam(TmUser existing, EamUser eamUser, String normalizedEmail) {
+        String eamRole = resolveRole(eamUser).orElse("Technician");
+        boolean changed = false;
+
+        if (!Objects.equals(existing.getFirstName(), eamUser.getFirstName())) {
+            existing.setFirstName(eamUser.getFirstName());
+            changed = true;
+        }
+        if (!Objects.equals(existing.getLastName(), eamUser.getLastName())) {
+            existing.setLastName(eamUser.getLastName());
+            changed = true;
+        }
+        if (!Objects.equals(existing.getEmail(), normalizedEmail)) {
+            existing.setEmail(normalizedEmail);
+            changed = true;
+        }
+        if (!Objects.equals(existing.getPasswordHash(), eamUser.getPassword())) {
+            existing.setPasswordHash(eamUser.getPassword());
+            changed = true;
+        }
+        if (!Objects.equals(existing.getRole(), eamRole)) {
+            existing.setRole(eamRole);
+            changed = true;
+        }
+
+        return changed ? tmUserRepository.save(existing) : existing;
+    }
+
+    // Loads active eam user.
     private EamUser loadActiveEamUser(String normalizedEmail) {
         EamUser eamUser = eamUserRepository.findByEmailAndDeletedFalse(normalizedEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
@@ -150,6 +189,7 @@ public class TmAuthService {
         return eamUser;
     }
 
+    // Loads active companies.
     private List<EamCompany> loadActiveCompanies(EamUser eamUser) {
         List<EamCompany> companies = eamUserCompanyRepository.findByUser_IdAndCompany_ActiveTrue(eamUser.getId())
                 .stream()
@@ -164,6 +204,7 @@ public class TmAuthService {
         return companies;
     }
 
+    // Converts data to company dto.
     private LoginResponseDto.CompanyDto toCompanyDto(EamCompany company) {
         return LoginResponseDto.CompanyDto.builder()
                 .id(company.getId())
@@ -180,6 +221,7 @@ public class TmAuthService {
                 .build();
     }
 
+    // Resolves role.
     private Optional<String> resolveRole(EamUser eamUser) {
         return eamUser.getUserRoles() == null
                 ? Optional.empty()
@@ -192,6 +234,7 @@ public class TmAuthService {
                         .findFirst();
     }
 
+    // Checks whether admin.
     private boolean isAdmin(EamUser eamUser) {
         return eamUser.getUserRoles() != null
                 && eamUser.getUserRoles()
@@ -204,8 +247,9 @@ public class TmAuthService {
                         .anyMatch(roleName -> ADMIN_ROLE_NAME.equalsIgnoreCase(roleName));
     }
 
+    // Rejects active invite.
     private void rejectActiveInvite(String normalizedEmail) {
-        if (inviteRepository.existsByEmailAndAcceptedFalse(normalizedEmail)) {
+        if (inviteRepository.existsByEmailAndAcceptedFalseAndExpiresAtAfter(normalizedEmail, java.time.Instant.now())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "An invite is already pending for this email");
         }
     }

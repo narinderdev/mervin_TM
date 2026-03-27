@@ -4,6 +4,9 @@ import java.util.List;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * Transfers work order number list response data between layers.
+ */
 @Data
 @Builder
 public class WorkOrderNumberListResponse {

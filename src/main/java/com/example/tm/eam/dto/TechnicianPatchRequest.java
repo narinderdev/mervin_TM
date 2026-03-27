@@ -6,6 +6,9 @@ import lombok.Setter;
 
 import java.time.LocalDate;
 
+/**
+ * Transfers technician patch request data between layers.
+ */
 @Getter
 @Setter
 public class TechnicianPatchRequest {

@@ -15,6 +15,9 @@ import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates eam user functionality.
+ */
 @Getter
 @Setter
 @Entity

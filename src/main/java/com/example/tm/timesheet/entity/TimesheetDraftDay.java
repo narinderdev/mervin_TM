@@ -18,6 +18,9 @@ import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates timesheet draft day functionality.
+ */
 @Getter
 @Setter
 @Entity
@@ -44,11 +47,13 @@ public class TimesheetDraftDay {
     @OneToMany(mappedBy = "timesheetDraftDay", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<TimesheetDraftRow> rows = new ArrayList<>();
 
+    // Handles add row.
     public void addRow(TimesheetDraftRow row) {
         row.setTimesheetDraftDay(this);
         rows.add(row);
     }
 
+    // Handles clear rows.
     public void clearRows() {
         rows.forEach(r -> r.setTimesheetDraftDay(null));
         rows.clear();

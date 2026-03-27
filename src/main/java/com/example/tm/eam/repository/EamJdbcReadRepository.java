@@ -5,6 +5,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+/**
+ * Handles persistence operations for eam jdbc read repository.
+ */
 @Repository
 @RequiredArgsConstructor
 public class EamJdbcReadRepository implements EamReadRepository {
@@ -18,6 +21,7 @@ public class EamJdbcReadRepository implements EamReadRepository {
     @Qualifier("eamJdbcTemplate")
     private final JdbcTemplate eamJdbcTemplate;
 
+    // Handles technician exists.
     @Override
     public boolean technicianExists(Long technicianId) {
         Integer count = eamJdbcTemplate.queryForObject(TECHNICIAN_EXISTS_SQL, Integer.class, technicianId);

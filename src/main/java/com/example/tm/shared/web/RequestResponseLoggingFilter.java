@@ -16,6 +16,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
+/**
+ * Encapsulates request response logging filter functionality.
+ */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
 public class RequestResponseLoggingFilter extends OncePerRequestFilter {
@@ -23,6 +26,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(RequestResponseLoggingFilter.class);
     private static final int REQUEST_CACHE_LIMIT_BYTES = 1024 * 1024;
 
+    // Handles should not filter.
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getRequestURI();
@@ -33,6 +37,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
                 || path.startsWith("/favicon");
     }
 
+    // Handles do filter internal.
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
@@ -54,6 +59,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
         }
     }
 
+    // Handles log request.
     private void logRequest(ContentCachingRequestWrapper request) {
         String method = request.getMethod();
         String uri = request.getRequestURI();
@@ -86,6 +92,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
         log.info(sb.toString());
     }
 
+    // Handles log response.
     private void logResponse(ContentCachingResponseWrapper response, long durationMs) {
         StringBuilder sb = new StringBuilder();
         sb.append("\n--- [TM HTTP RESPONSE] ----------------------------\n");
@@ -113,6 +120,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
         log.info(sb.toString());
     }
 
+    // Returns body.
     private String getBody(byte[] data) {
         if (data == null || data.length == 0) {
             return "";
@@ -120,6 +128,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
         return new String(data, StandardCharsets.UTF_8);
     }
 
+    // Handles mask header.
     private String maskHeader(String name, String value) {
         if (value == null) {
             return null;
@@ -134,6 +143,7 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
         return value;
     }
 
+    // Handles mask sensitive body.
     private String maskSensitiveBody(String body) {
         return body
                 .replaceAll("\"password\"\\s*:\\s*\"[^\"]*\"", "\"password\":\"***\"")

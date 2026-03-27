@@ -11,6 +11,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates eam user company functionality.
+ */
 @Getter
 @Setter
 @Entity

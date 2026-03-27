@@ -9,6 +9,9 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates eam role functionality.
+ */
 @Getter
 @Setter
 @Entity

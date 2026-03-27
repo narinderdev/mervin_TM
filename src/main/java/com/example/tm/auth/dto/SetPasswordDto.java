@@ -5,6 +5,9 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Transfers set password dto data between layers.
+ */
 @Getter
 @Setter
 public class SetPasswordDto {

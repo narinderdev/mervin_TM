@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Exposes API endpoints for eam lookup controller.
+ */
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
@@ -23,6 +26,7 @@ public class EamLookupController {
 
     private final EamLookupService eamLookupService;
 
+    // Returns work order numbers.
     @GetMapping("/work-orders/numbers")
     public ResponseEntity<ApiResponse<?>> getWorkOrderNumbers(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -38,6 +42,7 @@ public class EamLookupController {
                 eamLookupService.getWorkOrderNumbers(page, size, technicianId, companyId)));
     }
 
+    // Returns capex work order numbers.
     @GetMapping("/work-orders/numbers/capex")
     public ResponseEntity<ApiResponse<?>> getCapexWorkOrderNumbers(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -53,6 +58,7 @@ public class EamLookupController {
                 eamLookupService.getCapexWorkOrderNumbers(page, size, technicianId, companyId)));
     }
 
+    // Returns work order gl accounts.
     @GetMapping("/work-orders/gl-accounts")
     public ResponseEntity<ApiResponse<?>> getWorkOrderGlAccounts(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -64,6 +70,7 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Work order GL accounts fetched successfully", eamLookupService.getWorkOrderGlAccounts(page, size, companyId)));
     }
 
+    // Returns work order types.
     @GetMapping("/work-orders/types")
     public ResponseEntity<ApiResponse<?>> getWorkOrderTypes(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -77,6 +84,7 @@ public class EamLookupController {
                 eamLookupService.getWorkOrderTypes(page, size, companyId)));
     }
 
+    // Returns work request type property units.
     @GetMapping("/work-request-types/property-units")
     public ResponseEntity<ApiResponse<?>> getWorkRequestTypePropertyUnits(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -90,6 +98,7 @@ public class EamLookupController {
                 eamLookupService.getWorkRequestTypePropertyUnits(page, size, companyId)));
     }
 
+    // Returns work orders.
     @GetMapping("/work-orders")
     public ResponseEntity<ApiResponse<?>> getWorkOrders(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -101,6 +110,7 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Work orders fetched successfully", eamLookupService.getWorkOrders(page, size, companyId)));
     }
 
+    // Returns work order by id.
     @GetMapping("/work-orders/{id}")
     public ResponseEntity<ApiResponse<?>> getWorkOrderById(
             @PathVariable("id") Long workOrderId,
@@ -111,6 +121,7 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Work order details fetched successfully", eamLookupService.getWorkOrderById(workOrderId, companyId)));
     }
 
+    // Handles add work order to favourites.
     @PostMapping("/work-orders/{id}/favourites")
     public ResponseEntity<ApiResponse<?>> addWorkOrderToFavourites(
             @PathVariable("id") Long workOrderId,
@@ -125,6 +136,7 @@ public class EamLookupController {
                 eamLookupService.addWorkOrderToFavourites(technicianId, workOrderId, companyId)));
     }
 
+    // Returns holidays.
     @GetMapping("/holidays")
     public ResponseEntity<ApiResponse<?>> getHolidays(
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -136,6 +148,7 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Holidays fetched successfully", eamLookupService.getHolidays(page, size, companyId)));
     }
 
+    // Returns holiday by id.
     @GetMapping("/holidays/{id}")
     public ResponseEntity<ApiResponse<?>> getHolidayById(
             @PathVariable("id") Long holidayId,
@@ -146,6 +159,7 @@ public class EamLookupController {
                 HttpStatus.OK.value(), "Holiday fetched successfully", eamLookupService.getHolidayById(holidayId, companyId)));
     }
 
+    // Handles correlation id.
     private String correlationId(HttpServletRequest request) {
         Object fromRequest = request.getAttribute(HeaderConstants.CORRELATION_ID_HEADER);
         if (fromRequest instanceof String value && !value.isBlank()) {

@@ -10,6 +10,9 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Encapsulates tm user invite functionality.
+ */
 @Getter
 @Setter
 @Entity

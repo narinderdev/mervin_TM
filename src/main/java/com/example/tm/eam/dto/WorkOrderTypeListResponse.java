@@ -5,6 +5,9 @@ import java.util.Map;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * Transfers work order type list response data between layers.
+ */
 @Data
 @Builder
 public class WorkOrderTypeListResponse {

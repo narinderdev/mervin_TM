@@ -9,6 +9,9 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+/**
+ * Contains business logic for email service.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -19,6 +22,7 @@ public class EmailService {
 
     private String fromEmail;
 
+    // Handles init.
     @PostConstruct
     public void init() {
         this.fromEmail = environment.getProperty("spring.mail.username");
@@ -29,6 +33,7 @@ public class EmailService {
         }
     }
 
+    // Sends html.
     public void sendHtml(String to, String subject, String html) {
         if (fromEmail == null || fromEmail.isBlank()) {
             throw new IllegalStateException("Mail credentials not configured (spring.mail.username/password).");

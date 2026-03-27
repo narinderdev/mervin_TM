@@ -13,6 +13,9 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 
+/**
+ * Encapsulates database health logger functionality.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -27,6 +30,7 @@ public class DatabaseHealthLogger {
     @Value("${app.startup.db-check.enabled:true}")
     private boolean enabled;
 
+    // Handles on ready.
     @EventListener(ApplicationReadyEvent.class)
     public void onReady() {
         if (!enabled) {
@@ -37,6 +41,7 @@ public class DatabaseHealthLogger {
         check("EAM", eamDataSource);
     }
 
+    // Handles check.
     private void check(String name, DataSource dataSource) {
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement("SELECT 1");

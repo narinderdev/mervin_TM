@@ -5,6 +5,9 @@ import java.time.LocalDateTime;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * Transfers work order details response data between layers.
+ */
 @Data
 @Builder
 public class WorkOrderDetailsResponse {

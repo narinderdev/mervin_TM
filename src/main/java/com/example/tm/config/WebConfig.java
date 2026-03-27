@@ -7,6 +7,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * Configures application components for web config.
+ */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
@@ -16,6 +19,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Value("${app.cors.allowed-origin-patterns:https://*.ngrok-free.app,http://*.ngrok-free.app}")
     private String allowedOriginPatterns;
 
+    // Handles add cors mappings.
     @Override
     public void addCorsMappings(CorsRegistry registry) {
         registry.addMapping("/**")
@@ -28,6 +32,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .maxAge(3600);
     }
 
+    // Resolves allowed origins.
     private List<String> resolveAllowedOrigins() {
         return Arrays.stream(allowedOrigins.split(","))
                 .map(String::trim)
@@ -35,6 +40,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .toList();
     }
 
+    // Resolves allowed origin patterns.
     private List<String> resolveAllowedOriginPatterns() {
         return Arrays.stream(allowedOriginPatterns.split(","))
                 .map(String::trim)

@@ -11,6 +11,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
+/**
+ * Transfers timesheet day request dto data between layers.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class TimesheetDayRequestDto {
 
@@ -32,34 +35,42 @@ public class TimesheetDayRequestDto {
     @JsonProperty("rows")
     private List<TimesheetRowRequestDto> rows;
 
+    // Returns date.
     public LocalDate getDate() {
         return date;
     }
 
+    // Sets date.
     public void setDate(LocalDate date) {
         this.date = date;
     }
 
+    // Returns day of week.
     public String getDayOfWeek() {
         return dayOfWeek;
     }
 
+    // Sets day of week.
     public void setDayOfWeek(String dayOfWeek) {
         this.dayOfWeek = dayOfWeek;
     }
 
+    // Returns daily total.
     public BigDecimal getDailyTotal() {
         return dailyTotal;
     }
 
+    // Sets daily total.
     public void setDailyTotal(BigDecimal dailyTotal) {
         this.dailyTotal = dailyTotal;
     }
 
+    // Returns rows.
     public List<TimesheetRowRequestDto> getRows() {
         return rows;
     }
 
+    // Sets rows.
     public void setRows(List<TimesheetRowRequestDto> rows) {
         this.rows = rows;
     }
