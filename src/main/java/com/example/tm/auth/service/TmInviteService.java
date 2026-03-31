@@ -154,6 +154,12 @@ public class TmInviteService {
         user.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
         user.setRole("Technician");
         user.setActive(true);
+        user.setMfaEnabled(false);
+        user.setMfaSecret(null);
+        user.setMfaSecretTemp(null);
+        user.setMfaEmailVerified(false);
+        user.setMfaEmailOtp(null);
+        user.setMfaEmailOtpExpiresAt(null);
         tmUserRepository.save(user);
 
         invite.setAccepted(true);

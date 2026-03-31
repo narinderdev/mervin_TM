@@ -43,6 +43,24 @@ public class TmUser {
     @Column(name = "active", nullable = false)
     private Boolean active = true;
 
+    @Column(name = "mfa_enabled", nullable = false)
+    private boolean mfaEnabled = false;
+
+    @Column(name = "mfa_secret", length = 512)
+    private String mfaSecret;
+
+    @Column(name = "mfa_secret_temp", length = 512)
+    private String mfaSecretTemp;
+
+    @Column(name = "mfa_email_otp", length = 10)
+    private String mfaEmailOtp;
+
+    @Column(name = "mfa_email_otp_expires_at")
+    private Instant mfaEmailOtpExpiresAt;
+
+    @Column(name = "mfa_email_verified", nullable = false)
+    private boolean mfaEmailVerified = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

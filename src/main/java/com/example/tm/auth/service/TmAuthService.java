@@ -2,6 +2,7 @@ package com.example.tm.auth.service;
 
 import com.example.tm.auth.dto.LoginRequestDto;
 import com.example.tm.auth.dto.LoginResponseDto;
+import com.example.tm.auth.dto.MfaLoginDto;
 import com.example.tm.auth.dto.SignupRequestDto;
 import com.example.tm.auth.dto.UserSummaryDto;
 import com.example.tm.auth.entity.TmUser;
@@ -17,11 +18,13 @@ import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.security.TmJwtService;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -38,6 +41,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class TmAuthService {
 
     private static final String ADMIN_ROLE_NAME = "Admin";
+    private static final String TECHNICIAN_ROLE_NAME = "Technician";
 
     @Value("${app.auth.login.max-failed-attempts:5}")
     private int maxFailedAttempts = 5;
@@ -45,12 +49,16 @@ public class TmAuthService {
     @Value("${app.auth.login.block-seconds:900}")
     private int blockSeconds = 900;
 
+    @Value("${app.mfa.token-expiration-ms:300000}")
+    private long mfaTokenExpirationMs = 300000L;
+
     private final TmUserRepository tmUserRepository;
     private final EamUserRepository eamUserRepository;
     private final EamUserCompanyRepository eamUserCompanyRepository;
     private final TmUserInviteRepository inviteRepository;
     private final TmJwtService tmJwtService;
     private final PasswordEncoder passwordEncoder;
+    private final MfaService mfaService;
     private final ConcurrentMap<String, LoginAttemptState> loginAttemptByEmail = new ConcurrentHashMap<>();
 
     /** Handles signup. */
@@ -93,25 +101,59 @@ public class TmAuthService {
             validateUserStatus(user);
 
             clearFailedLogin(normalizedEmail);
-            String token = tmJwtService.generateAccessToken(user);
-            List<LoginResponseDto.CompanyDto> responseCompanies = companies.stream()
-                    .map(this::toCompanyDto)
-                    .toList();
-            boolean isAdmin = isAdmin(eamUser);
 
-            return LoginResponseDto.builder()
-                    .token(token)
-                    .user(toUserSummary(user))
-                    .companies(responseCompanies)
-                    .isCompanySetup(isAdmin ? !responseCompanies.isEmpty() : null)
-                    .mfaRequired(false)
-                    .build();
+            if (isTechnician(user) && !user.isMfaEnabled()) {
+                mfaService.sendEmailOtp(user.getEmail());
+            }
+
+            if (user.isMfaEnabled()) {
+                String mfaToken = buildMfaToken(user, request.getDeviceToken(), request.getDevicePlatform());
+                return buildLoginResponse(user, eamUser, companies, null, true, mfaToken);
+            }
+
+            String token = tmJwtService.generateAccessToken(user);
+            return buildLoginResponse(user, eamUser, companies, token, false, null);
         } catch (ResponseStatusException ex) {
             if (HttpStatus.UNAUTHORIZED.equals(ex.getStatusCode())) {
                 registerFailedLogin(normalizedEmail);
             }
             throw ex;
         }
+    }
+
+    /** Handles login with mfa. */
+    @Transactional
+    public LoginResponseDto loginWithMfa(MfaLoginDto request) {
+        Claims claims = parseMfaClaims(request.getMfaToken());
+        String normalizedEmail = normalizeEmail(claims.getSubject());
+        Long userId = extractUserId(claims);
+
+        if (normalizedEmail == null || normalizedEmail.isBlank() || userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MFA token");
+        }
+
+        TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (!Objects.equals(user.getId(), userId)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MFA token");
+        }
+
+        validateUserStatus(user);
+        if (!user.isMfaEnabled()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "MFA is not enabled");
+        }
+
+        mfaService.checkLoginRateLimit(user.getId());
+        boolean codeValid = mfaService.verifyActiveCode(user, request.getCode());
+        if (!codeValid) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MFA code");
+        }
+
+        EamUser eamUser = loadActiveEamUser(normalizedEmail);
+        List<EamCompany> companies = loadActiveCompanies(eamUser);
+        String token = tmJwtService.generateAccessToken(user);
+        return buildLoginResponse(user, eamUser, companies, token, false, null);
     }
 
     /** Returns logged in users. */
@@ -241,6 +283,72 @@ public class TmAuthService {
                 .build();
     }
 
+    /** Builds login response. */
+    private LoginResponseDto buildLoginResponse(
+            TmUser user,
+            EamUser eamUser,
+            List<EamCompany> companies,
+            String token,
+            boolean mfaRequired,
+            String mfaToken) {
+        List<LoginResponseDto.CompanyDto> responseCompanies = companies.stream()
+                .map(this::toCompanyDto)
+                .toList();
+        boolean isAdmin = isAdmin(eamUser);
+
+        return LoginResponseDto.builder()
+                .token(token)
+                .user(toUserSummary(user))
+                .companies(responseCompanies)
+                .isCompanySetup(isAdmin ? !responseCompanies.isEmpty() : null)
+                .mfaRequired(mfaRequired)
+                .mfaToken(mfaToken)
+                .build();
+    }
+
+    /** Builds mfa token. */
+    private String buildMfaToken(TmUser user, String deviceToken, String devicePlatform) {
+        Map<String, Object> claims = new java.util.HashMap<>();
+        claims.put("userId", user.getId());
+        claims.put("type", "mfa_pending");
+        if (deviceToken != null && !deviceToken.trim().isEmpty()) {
+            claims.put("deviceToken", deviceToken.trim());
+        }
+        if (devicePlatform != null && !devicePlatform.trim().isEmpty()) {
+            claims.put("devicePlatform", devicePlatform.trim());
+        }
+        return tmJwtService.generateToken(user.getEmail(), claims, mfaTokenExpirationMs);
+    }
+
+    /** Handles parse mfa claims. */
+    private Claims parseMfaClaims(String token) {
+        try {
+            Claims claims = tmJwtService.parseClaims(token);
+            String type = claims.get("type", String.class);
+            if (!"mfa_pending".equals(type)) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid MFA token");
+            }
+            return claims;
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid or expired MFA token");
+        } catch (ResponseStatusException ex) {
+            throw ex;
+        }
+    }
+
+    /** Extracts user id from claims. */
+    private Long extractUserId(Claims claims) {
+        Object value = claims.get("userId");
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        Object altValue = claims.get("user_id");
+        if (altValue instanceof Number number) {
+            return number.longValue();
+        }
+        return null;
+    }
+
     /** Resolves role. */
     private Optional<String> resolveRole(EamUser eamUser) {
         return eamUser.getUserRoles() == null
@@ -265,6 +373,13 @@ public class TmAuthService {
                         .filter(Objects::nonNull)
                         .map(String::trim)
                         .anyMatch(roleName -> ADMIN_ROLE_NAME.equalsIgnoreCase(roleName));
+    }
+
+    /** Checks whether technician. */
+    private boolean isTechnician(TmUser user) {
+        return user != null
+                && user.getRole() != null
+                && TECHNICIAN_ROLE_NAME.equalsIgnoreCase(user.getRole().trim());
     }
 
     /** Rejects active invite. */

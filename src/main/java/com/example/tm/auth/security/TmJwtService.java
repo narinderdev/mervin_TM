@@ -11,6 +11,7 @@ import java.security.Key;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.HashMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -33,18 +34,23 @@ public class TmJwtService {
 
     /** Handles generate access token. */
     public String generateAccessToken(TmUser user) {
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + expirationMs);
         Map<String, Object> claims = Map.of(
                 "userId", user.getId(),
                 "roles", List.of(user.getRole()),
                 "email", user.getEmail(),
                 "type", "access"
         );
+        return generateToken(user.getEmail(), claims, expirationMs);
+    }
 
+    /** Handles generate token. */
+    public String generateToken(String subject, Map<String, Object> claims, long tokenExpirationMs) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + tokenExpirationMs);
+        Map<String, Object> allClaims = claims == null ? new HashMap<>() : new HashMap<>(claims);
         return Jwts.builder()
-                .setSubject(user.getEmail())
-                .addClaims(claims)
+                .setSubject(subject)
+                .addClaims(allClaims)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(key, SignatureAlgorithm.HS256)
@@ -72,5 +78,15 @@ public class TmJwtService {
             return roles.get(0).toString();
         }
         throw new IllegalArgumentException("Role claim not present in token");
+    }
+
+    /** Handles extract email. */
+    public String extractEmail(String token) {
+        Claims claims = parseClaims(token);
+        String subject = claims.getSubject();
+        if (subject == null || subject.isBlank()) {
+            throw new IllegalArgumentException("Email claim not present in token");
+        }
+        return subject.trim().toLowerCase();
     }
 }

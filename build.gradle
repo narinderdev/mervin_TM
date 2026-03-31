@@ -25,7 +25,8 @@ java {
 sourceSets {
 	main {
 		java {
-			// Exclude the reference EAM codebase; we re-map only the pieces we need in tm.auth.integration.eam
+			// Exclude reference EAM codebase; TM uses only explicit integration models under tm.auth.integration.eam
+			exclude 'com/example/eam/**'
 			exclude 'com/example/eam1/**'
 		}
 	}
@@ -53,6 +54,8 @@ dependencies {
 	implementation 'org.springframework.security:spring-security-crypto'
 	implementation 'com.fasterxml.jackson.core:jackson-databind'
 	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+	implementation 'com.google.zxing:core:3.5.3'
+	implementation 'com.google.zxing:javase:3.5.3'
 	implementation "org.flywaydb:flyway-core:11.20.2"
 	implementation "org.flywaydb:flyway-sqlserver:11.20.2"
 	compileOnly 'org.projectlombok:lombok:1.18.38'
