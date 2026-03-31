@@ -30,6 +30,14 @@ jobs:
           echo "Pulling latest code..."
           git pull
 
+          echo "Pulling Env credentials..."
+
+          export $(grep -v '^#' .env | xargs)
+
+          echo "Running migration..."
+
+          ./gradlew flywayMigrate
+
           echo "Building app..."
           chmod +x gradlew
           ./gradlew clean bootJar
