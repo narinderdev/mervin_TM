@@ -92,14 +92,14 @@ public class TmAuthService {
         try {
             EamUser eamUser = loadActiveEamUser(normalizedEmail);
             List<EamCompany> companies = loadActiveCompanies(eamUser);
-            validateEamPassword(request.getPassword(), eamUser.getPassword());
+            Optional<TmUser> existingUser = tmUserRepository.findByEmailIgnoreCase(normalizedEmail);
+            validateLoginPassword(request.getPassword(), existingUser.orElse(null), eamUser);
 
-            TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
+            TmUser user = existingUser
                     .map(existing -> resyncFromEam(existing, eamUser, normalizedEmail))
                     .orElseGet(() -> createFromEam(eamUser, normalizedEmail));
 
             validateUserStatus(user);
-
             clearFailedLogin(normalizedEmail);
 
             if (isTechnician(user) && !user.isMfaEnabled()) {
@@ -189,11 +189,21 @@ public class TmAuthService {
         }
     }
 
-    /** Validates EAM password hash. */
-    private void validateEamPassword(String rawPassword, String eamPasswordHash) {
-        if (eamPasswordHash == null || !passwordEncoder.matches(rawPassword, eamPasswordHash)) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+    /** Validates login password and heals TM/EAM mismatch for invited technicians. */
+    private void validateLoginPassword(String rawPassword, TmUser tmUser, EamUser eamUser) {
+        String eamPasswordHash = eamUser.getPassword();
+        if (eamPasswordHash != null && passwordEncoder.matches(rawPassword, eamPasswordHash)) {
+            return;
         }
+
+        String tmPasswordHash = tmUser == null ? null : tmUser.getPasswordHash();
+        if (isTechnician(tmUser) && tmPasswordHash != null && passwordEncoder.matches(rawPassword, tmPasswordHash)) {
+            eamUser.setPassword(tmPasswordHash);
+            eamUserRepository.save(eamUser);
+            return;
+        }
+
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
     }
 
     /**

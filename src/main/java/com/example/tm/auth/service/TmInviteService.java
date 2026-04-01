@@ -4,6 +4,9 @@ import com.example.tm.auth.dto.InviteTechnicianRequestDto;
 import com.example.tm.auth.dto.SetPasswordDto;
 import com.example.tm.auth.entity.TmUser;
 import com.example.tm.auth.entity.TmUserInvite;
+import com.example.tm.auth.integration.eam.EamUser;
+import com.example.tm.auth.integration.eam.EamUserRepository;
+import com.example.tm.auth.integration.eam.EamUserStatus;
 import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.shared.EmailService;
@@ -33,6 +36,7 @@ public class TmInviteService {
 
     private final TmUserInviteRepository inviteRepository;
     private final TmUserRepository tmUserRepository;
+    private final EamUserRepository eamUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmailService emailService;
 
@@ -147,11 +151,23 @@ public class TmInviteService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "User already exists");
         }
 
+        EamUser eamUser = eamUserRepository.findByEmailAndDeletedFalse(email)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "No active EAM user found for this email"));
+        if (eamUser.getStatus() != EamUserStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
+        }
+
+        String encodedPassword = passwordEncoder.encode(dto.getPassword());
+        eamUser.setPassword(encodedPassword);
+        eamUserRepository.save(eamUser);
+
         TmUser user = new TmUser();
         user.setFirstName(invite.getFirstName());
         user.setLastName(invite.getLastName());
         user.setEmail(email);
-        user.setPasswordHash(passwordEncoder.encode(dto.getPassword()));
+        user.setPasswordHash(encodedPassword);
         user.setRole("Technician");
         user.setActive(true);
         user.setMfaEnabled(false);
