@@ -13,6 +13,7 @@ import com.example.tm.shared.EmailService;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.core.io.ClassPathResource;
 import lombok.RequiredArgsConstructor;
@@ -151,17 +152,16 @@ public class TmInviteService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "User already exists");
         }
 
-        EamUser eamUser = eamUserRepository.findByEmailAndDeletedFalse(email)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "No active EAM user found for this email"));
-        if (eamUser.getStatus() != EamUserStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
-        }
-
         String encodedPassword = passwordEncoder.encode(dto.getPassword());
-        eamUser.setPassword(encodedPassword);
-        eamUserRepository.save(eamUser);
+        Optional<EamUser> eamUserOpt = eamUserRepository.findByEmailAndDeletedFalse(email);
+        if (eamUserOpt.isPresent()) {
+            EamUser eamUser = eamUserOpt.get();
+            if (eamUser.getStatus() != EamUserStatus.ACTIVE) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
+            }
+            eamUser.setPassword(encodedPassword);
+            eamUserRepository.save(eamUser);
+        }
 
         TmUser user = new TmUser();
         user.setFirstName(invite.getFirstName());

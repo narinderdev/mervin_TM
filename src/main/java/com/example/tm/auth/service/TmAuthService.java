@@ -90,14 +90,27 @@ public class TmAuthService {
         String normalizedEmail = normalizeEmail(request.getEmail());
         enforceLoginRateLimit(normalizedEmail);
         try {
-            EamUser eamUser = loadActiveEamUser(normalizedEmail);
-            List<EamCompany> companies = loadActiveCompanies(eamUser);
             Optional<TmUser> existingUser = tmUserRepository.findByEmailIgnoreCase(normalizedEmail);
-            validateLoginPassword(request.getPassword(), existingUser.orElse(null), eamUser);
+            Optional<EamUser> eamUserOpt = findActiveEamUser(normalizedEmail);
 
-            TmUser user = existingUser
-                    .map(existing -> resyncFromEam(existing, eamUser, normalizedEmail))
-                    .orElseGet(() -> createFromEam(eamUser, normalizedEmail));
+            TmUser user;
+            List<EamCompany> companies;
+            EamUser eamUser;
+
+            if (eamUserOpt.isPresent()) {
+                eamUser = eamUserOpt.get();
+                companies = loadActiveCompanies(eamUser);
+                validateLoginPassword(request.getPassword(), existingUser.orElse(null), eamUser);
+                user = existingUser
+                        .map(existing -> resyncFromEam(existing, eamUser, normalizedEmail))
+                        .orElseGet(() -> createFromEam(eamUser, normalizedEmail));
+            } else {
+                eamUser = null;
+                companies = List.of();
+                user = existingUser.orElseThrow(
+                        () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+                validateTmPassword(request.getPassword(), user);
+            }
 
             validateUserStatus(user);
             clearFailedLogin(normalizedEmail);
@@ -206,6 +219,14 @@ public class TmAuthService {
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
     }
 
+    /** Validates TM-only password. */
+    private void validateTmPassword(String rawPassword, TmUser tmUser) {
+        String tmPasswordHash = tmUser == null ? null : tmUser.getPasswordHash();
+        if (tmPasswordHash == null || !passwordEncoder.matches(rawPassword, tmPasswordHash)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
+        }
+    }
+
     /**
      * If the user exists in EAM but not yet in TM, create a TM user from EAM.
      */
@@ -252,13 +273,21 @@ public class TmAuthService {
 
     /** Loads active eam user. */
     private EamUser loadActiveEamUser(String normalizedEmail) {
-        EamUser eamUser = eamUserRepository.findByEmailAndDeletedFalse(normalizedEmail)
+        return findActiveEamUser(normalizedEmail)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+    }
 
+    /** Finds active eam user if present. */
+    private Optional<EamUser> findActiveEamUser(String normalizedEmail) {
+        Optional<EamUser> eamUserOpt = eamUserRepository.findByEmailAndDeletedFalse(normalizedEmail);
+        if (eamUserOpt.isEmpty()) {
+            return Optional.empty();
+        }
+        EamUser eamUser = eamUserOpt.get();
         if (eamUser.getStatus() != EamUserStatus.ACTIVE) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
         }
-        return eamUser;
+        return Optional.of(eamUser);
     }
 
     /** Loads active companies. */
@@ -304,7 +333,7 @@ public class TmAuthService {
         List<LoginResponseDto.CompanyDto> responseCompanies = companies.stream()
                 .map(this::toCompanyDto)
                 .toList();
-        boolean isAdmin = isAdmin(eamUser);
+        boolean isAdmin = eamUser != null && isAdmin(eamUser);
 
         return LoginResponseDto.builder()
                 .token(token)
