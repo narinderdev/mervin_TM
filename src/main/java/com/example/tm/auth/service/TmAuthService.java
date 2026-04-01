@@ -104,7 +104,7 @@ public class TmAuthService {
 
             if (eamUserOpt.isPresent()) {
                 eamUser = eamUserOpt.get();
-                companies = loadActiveCompanies(eamUser);
+                companies = resolveLoginCompanies(eamUser, normalizedEmail);
                 validateLoginPassword(request.getPassword(), existingUser.orElse(null), eamUser);
                 user = existingUser
                         .map(existing -> resyncFromEam(existing, eamUser, normalizedEmail))
@@ -169,7 +169,7 @@ public class TmAuthService {
         }
 
         EamUser eamUser = loadActiveEamUser(normalizedEmail);
-        List<EamCompany> companies = loadActiveCompanies(eamUser);
+        List<EamCompany> companies = resolveLoginCompanies(eamUser, normalizedEmail);
         String token = tmJwtService.generateAccessToken(user);
         return buildLoginResponse(user, eamUser, companies, token, false, null);
     }
@@ -295,19 +295,25 @@ public class TmAuthService {
         return Optional.of(eamUser);
     }
 
-    /** Loads active companies. */
-    private List<EamCompany> loadActiveCompanies(EamUser eamUser) {
-        List<EamCompany> companies = eamUserCompanyRepository.findByUser_IdAndCompany_ActiveTrue(eamUser.getId())
+    /** Resolves companies for login (EAM mapping first, TM mapping fallback). */
+    private List<EamCompany> resolveLoginCompanies(EamUser eamUser, String normalizedEmail) {
+        List<EamCompany> companies = loadActiveCompaniesFromEam(eamUser);
+        if (companies.isEmpty()) {
+            companies = loadActiveCompaniesForTmTechnician(normalizedEmail);
+        }
+        if (companies.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No active company found for this user");
+        }
+        return companies;
+    }
+
+    /** Loads active companies from EAM user-company mapping. */
+    private List<EamCompany> loadActiveCompaniesFromEam(EamUser eamUser) {
+        return eamUserCompanyRepository.findByUser_IdAndCompany_ActiveTrue(eamUser.getId())
                 .stream()
                 .map(EamUserCompany::getCompany)
                 .filter(Objects::nonNull)
                 .toList();
-
-        if (companies.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No active company found for this user");
-        }
-
-        return companies;
     }
 
     /** Loads active companies for TM-only technician login. */
