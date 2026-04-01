@@ -7,6 +7,7 @@ import com.example.tm.auth.dto.SignupRequestDto;
 import com.example.tm.auth.dto.UserSummaryDto;
 import com.example.tm.auth.entity.TmUser;
 import com.example.tm.auth.integration.eam.EamCompany;
+import com.example.tm.auth.integration.eam.EamCompanyRepository;
 import com.example.tm.auth.integration.eam.EamUser;
 import com.example.tm.auth.integration.eam.EamUserRole;
 import com.example.tm.auth.integration.eam.EamUserStatus;
@@ -16,6 +17,7 @@ import com.example.tm.auth.integration.eam.EamUserRepository;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.security.TmJwtService;
+import javax.sql.DataSource;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,7 @@ import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,12 +56,14 @@ public class TmAuthService {
     private long mfaTokenExpirationMs = 300000L;
 
     private final TmUserRepository tmUserRepository;
+    private final EamCompanyRepository eamCompanyRepository;
     private final EamUserRepository eamUserRepository;
     private final EamUserCompanyRepository eamUserCompanyRepository;
     private final TmUserInviteRepository inviteRepository;
     private final TmJwtService tmJwtService;
     private final PasswordEncoder passwordEncoder;
     private final MfaService mfaService;
+    private final DataSource tmDataSource;
     private final ConcurrentMap<String, LoginAttemptState> loginAttemptByEmail = new ConcurrentHashMap<>();
 
     /** Handles signup. */
@@ -106,7 +111,7 @@ public class TmAuthService {
                         .orElseGet(() -> createFromEam(eamUser, normalizedEmail));
             } else {
                 eamUser = null;
-                companies = List.of();
+                companies = loadActiveCompaniesForTmTechnician(normalizedEmail);
                 user = existingUser.orElseThrow(
                         () -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
                 validateTmPassword(request.getPassword(), user);
@@ -303,6 +308,31 @@ public class TmAuthService {
         }
 
         return companies;
+    }
+
+    /** Loads active companies for TM-only technician login. */
+    private List<EamCompany> loadActiveCompaniesForTmTechnician(String normalizedEmail) {
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            return List.of();
+        }
+        JdbcTemplate tmJdbcTemplate = new JdbcTemplate(tmDataSource);
+        List<Long> companyIds = tmJdbcTemplate.queryForList(
+                """
+                        SELECT DISTINCT company_id
+                        FROM technicians
+                        WHERE is_deleted = 0
+                          AND company_id IS NOT NULL
+                          AND LOWER(email) = LOWER(?)
+                        """,
+                Long.class,
+                normalizedEmail);
+        if (companyIds.isEmpty()) {
+            return List.of();
+        }
+        return eamCompanyRepository.findByIdInAndActiveTrue(companyIds)
+                .stream()
+                .sorted(java.util.Comparator.comparing(EamCompany::getId))
+                .toList();
     }
 
     /** Converts data to company dto. */
