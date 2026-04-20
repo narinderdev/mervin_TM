@@ -29,7 +29,11 @@ public interface TimesheetService {
 
     List<TimesheetResponseDto> getByTechnician(Long technicianId);
 
-    TimesheetResponseDto getDraftByTechnicianAndPeriod(Long technicianId, LocalDate periodStartDate, LocalDate periodEndDate);
+    TimesheetResponseDto getDraftByTechnicianAndPeriod(
+            Long technicianId,
+            LocalDate periodStartDate,
+            LocalDate periodEndDate,
+            Long companyId);
 
     TimesheetRecentEntryResponseDto getRecentEntryByTechnician(Long technicianId);
 }

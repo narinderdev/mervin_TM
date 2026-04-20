@@ -47,6 +47,9 @@ public class TimesheetDraftRow {
     @Column(name = "work_order_type", length = 100)
     private String workOrderType;
 
+    @Column(name = "work_order_id")
+    private Long workOrderId;
+
     @Column(name = "expense_code", length = 100)
     private String expenseCode;
 

@@ -24,6 +24,7 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -181,7 +182,11 @@ public class TimesheetServiceImpl implements TimesheetService {
     /** Returns draft by technician and period. */
     @Override
     @Transactional(readOnly = true, transactionManager = "tmTransactionManager")
-    public TimesheetResponseDto getDraftByTechnicianAndPeriod(Long technicianId, LocalDate periodStartDate, LocalDate periodEndDate) {
+    public TimesheetResponseDto getDraftByTechnicianAndPeriod(
+            Long technicianId,
+            LocalDate periodStartDate,
+            LocalDate periodEndDate,
+            Long companyId) {
         if (technicianId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "technicianId is required");
         }
@@ -197,6 +202,12 @@ public class TimesheetServiceImpl implements TimesheetService {
 
         TimesheetDraft draft = timesheetDraftRepository
                 .findByTechnicianIdAndPeriodStartDateAndPeriodEndDate(technicianId, periodStartDate, periodEndDate)
+                .or(() -> timesheetDraftRepository
+                        .findTopByTechnicianIdAndPeriodStartDateLessThanEqualAndPeriodEndDateGreaterThanEqualOrderByPeriodStartDateDescIdDesc(
+                                technicianId,
+                                periodStartDate,
+                                periodEndDate))
+                .or(() -> findDraftForTmUser(technicianId, periodStartDate, periodEndDate, companyId))
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Timesheet draft not found for technician " + technicianId + " and period " + periodStartDate + " to " + periodEndDate));
 
@@ -242,6 +253,29 @@ public class TimesheetServiceImpl implements TimesheetService {
     private Timesheet findByIdOrThrow(Long id) {
         return timesheetRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Timesheet not found: " + id));
+    }
+
+    /** Finds draft by treating provided id as tm_users.id and resolving technician via email. */
+    private Optional<TimesheetDraft> findDraftForTmUser(
+            Long tmUserId,
+            LocalDate periodStartDate,
+            LocalDate periodEndDate,
+            Long companyId) {
+        return tmUserRepository.findById(tmUserId)
+                .map(TmUser::getEmail)
+                .map(this::trimToNull)
+                .filter(email -> email != null && !email.isBlank())
+                .flatMap(email -> timesheetDraftRepository
+                        .findByTechnicianEmailAndPeriodStartDateAndPeriodEndDate(
+                                email,
+                                periodStartDate,
+                                periodEndDate,
+                                companyId)
+                        .or(() -> timesheetDraftRepository.findCoveringByTechnicianEmailAndPeriod(
+                                email,
+                                periodStartDate,
+                                periodEndDate,
+                                companyId)));
     }
 
     /** Populates entity. */

@@ -5,6 +5,8 @@ import com.example.tm.timesheet.dto.TimesheetRecentEntryResponseDto;
 import com.example.tm.timesheet.dto.TimesheetRequestDto;
 import com.example.tm.timesheet.dto.TimesheetResponseDto;
 import com.example.tm.timesheet.service.TimesheetService;
+import com.example.tm.timesheet.dto.WorkOrderTimesheetSyncResponseDto;
+import com.example.tm.timesheet.service.WorkOrderTimesheetSyncService;
 import java.time.LocalDate;
 import java.util.List;
 import jakarta.validation.Valid;
@@ -33,6 +35,7 @@ import org.springframework.web.server.ResponseStatusException;
 public class TimesheetController {
 
     private final TimesheetService timesheetService;
+    private final WorkOrderTimesheetSyncService workOrderTimesheetSyncService;
     private final TmJwtService tmJwtService;
 
     /** Handles create. */
@@ -89,14 +92,23 @@ public class TimesheetController {
     public TimesheetResponseDto getDraftByTechnicianAndPeriod(
             @PathVariable("technicianId") Long technicianId,
             @RequestParam("period_start_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodStartDate,
-            @RequestParam("period_end_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodEndDate) {
-        return timesheetService.getDraftByTechnicianAndPeriod(technicianId, periodStartDate, periodEndDate);
+            @RequestParam("period_end_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate periodEndDate,
+            @RequestParam(value = "companyId", required = false) Long companyId) {
+        return timesheetService.getDraftByTechnicianAndPeriod(technicianId, periodStartDate, periodEndDate, companyId);
     }
 
     /** Returns recent entry by technician. */
     @GetMapping("/technicians/{technicianId}/recent-entry")
     public TimesheetRecentEntryResponseDto getRecentEntryByTechnician(@PathVariable("technicianId") Long technicianId) {
         return timesheetService.getRecentEntryByTechnician(technicianId);
+    }
+
+    /** Handles sync work order to timesheet. */
+    @PostMapping("/work-orders/{workOrderId}/sync")
+    public WorkOrderTimesheetSyncResponseDto syncWorkOrderToTimesheet(
+            @PathVariable Long workOrderId,
+            @RequestParam(value = "companyId", required = false) Long companyId) {
+        return workOrderTimesheetSyncService.syncCompletedWorkOrder(workOrderId, companyId);
     }
 
     /** Handles approve. */

@@ -17,7 +17,6 @@ import com.example.tm.auth.integration.eam.EamUserRepository;
 import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.security.TmJwtService;
-import javax.sql.DataSource;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -27,9 +26,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 import io.jsonwebtoken.Claims;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -40,7 +39,6 @@ import org.springframework.web.server.ResponseStatusException;
  * Contains business logic for tm auth service.
  */
 @Service
-@RequiredArgsConstructor
 public class TmAuthService {
 
     private static final String ADMIN_ROLE_NAME = "Admin";
@@ -63,8 +61,31 @@ public class TmAuthService {
     private final TmJwtService tmJwtService;
     private final PasswordEncoder passwordEncoder;
     private final MfaService mfaService;
-    private final DataSource tmDataSource;
+    @Qualifier("tmJdbcTemplate")
+    private final JdbcTemplate tmJdbcTemplate;
     private final ConcurrentMap<String, LoginAttemptState> loginAttemptByEmail = new ConcurrentHashMap<>();
+
+    /** Creates a new instance of tm auth service. */
+    public TmAuthService(
+            TmUserRepository tmUserRepository,
+            EamCompanyRepository eamCompanyRepository,
+            EamUserRepository eamUserRepository,
+            EamUserCompanyRepository eamUserCompanyRepository,
+            TmUserInviteRepository inviteRepository,
+            TmJwtService tmJwtService,
+            PasswordEncoder passwordEncoder,
+            MfaService mfaService,
+            @Qualifier("tmJdbcTemplate") JdbcTemplate tmJdbcTemplate) {
+        this.tmUserRepository = tmUserRepository;
+        this.eamCompanyRepository = eamCompanyRepository;
+        this.eamUserRepository = eamUserRepository;
+        this.eamUserCompanyRepository = eamUserCompanyRepository;
+        this.inviteRepository = inviteRepository;
+        this.tmJwtService = tmJwtService;
+        this.passwordEncoder = passwordEncoder;
+        this.mfaService = mfaService;
+        this.tmJdbcTemplate = tmJdbcTemplate;
+    }
 
     /** Handles signup. */
     @Transactional
@@ -321,7 +342,6 @@ public class TmAuthService {
         if (normalizedEmail == null || normalizedEmail.isBlank()) {
             return List.of();
         }
-        JdbcTemplate tmJdbcTemplate = new JdbcTemplate(tmDataSource);
         List<Long> companyIds = tmJdbcTemplate.queryForList(
                 """
                         SELECT DISTINCT company_id
