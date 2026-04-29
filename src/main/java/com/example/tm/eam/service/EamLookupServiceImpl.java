@@ -1002,7 +1002,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     public WorkOrderDetailsResponse addWorkOrderToFavourites(Long technicianId, Long workOrderId, Long companyId) {
         Long safeCompanyId = requireCompanyId(companyId);
         ensureCompanyExistsInEam(safeCompanyId);
-        ensureTechnicianExistsTm(technicianId, safeCompanyId);
+        Long resolvedTechnicianId = resolveTechnicianIdFromTechnicianOrTmUserId(technicianId, safeCompanyId);
         WorkOrderDetailsResponse workOrder = getWorkOrderById(workOrderId, safeCompanyId);
         boolean companyScopedFavourites = hasTmCompanyIdColumn("work_order_favourites");
         if (companyScopedFavourites) {
@@ -1016,7 +1016,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                         INSERT INTO work_order_favourites (technician_id, work_order_id, company_id)
                         VALUES (?, ?, ?)
                     END
-                    """, technicianId, workOrderId, safeCompanyId, technicianId, workOrderId, safeCompanyId);
+                    """, resolvedTechnicianId, workOrderId, safeCompanyId, resolvedTechnicianId, workOrderId, safeCompanyId);
         } else {
             tmJdbcTemplate.update("""
                     IF NOT EXISTS (
@@ -1028,7 +1028,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                         INSERT INTO work_order_favourites (technician_id, work_order_id)
                         VALUES (?, ?)
                     END
-                    """, technicianId, workOrderId, technicianId, workOrderId);
+                    """, resolvedTechnicianId, workOrderId, resolvedTechnicianId, workOrderId);
         }
 
         return workOrder;
@@ -1043,7 +1043,7 @@ public class EamLookupServiceImpl implements EamLookupService {
             return List.of();
         }
 
-        ensureTechnicianExistsTm(technicianId, companyId);
+        Long resolvedTechnicianId = resolveTechnicianIdFromTechnicianOrTmUserId(technicianId, companyId);
         boolean companyScopedFavourites = hasTmCompanyIdColumn("work_order_favourites");
         List<Long> workOrderIds = companyScopedFavourites
                 ? tmJdbcTemplate.query("""
@@ -1057,7 +1057,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                             ORDER BY f.created_at DESC, f.id DESC
                             """,
                     (rs, rowNum) -> rs.getLong("work_order_id"),
-                    technicianId,
+                    resolvedTechnicianId,
                     companyId,
                     companyId)
                 : tmJdbcTemplate.query("""
@@ -1070,7 +1070,7 @@ public class EamLookupServiceImpl implements EamLookupService {
                             ORDER BY f.created_at DESC, f.id DESC
                             """,
                     (rs, rowNum) -> rs.getLong("work_order_id"),
-                    technicianId,
+                    resolvedTechnicianId,
                     companyId);
         if (workOrderIds.isEmpty()) {
             return List.of();
@@ -1118,6 +1118,47 @@ public class EamLookupServiceImpl implements EamLookupService {
                         .workOrderNumber(numberById.get(id))
                         .build())
                 .toList();
+    }
+
+    /** Resolves incoming id as technicians.id first, then falls back to tm_users.id via email. */
+    private Long resolveTechnicianIdFromTechnicianOrTmUserId(Long technicianIdOrTmUserId, Long companyId) {
+        if (technicianIdOrTmUserId == null) {
+            return null;
+        }
+
+        long technicianCount = queryLongTm(
+                "SELECT COUNT(1) FROM technicians WHERE id = ? AND company_id = ? AND is_deleted = 0",
+                technicianIdOrTmUserId,
+                companyId);
+        if (technicianCount > 0) {
+            return technicianIdOrTmUserId;
+        }
+
+        List<Map<String, Object>> userRows = tmJdbcTemplate.queryForList(
+                "SELECT email FROM tm_users WHERE id = ?",
+                technicianIdOrTmUserId);
+        if (userRows.isEmpty()) {
+            throw new ResourceNotFoundException("Technician not found: " + technicianIdOrTmUserId);
+        }
+
+        String email = safeTrim(asString(userRows.get(0).get("email")));
+        if (email == null) {
+            throw new ResourceNotFoundException("Technician not found: " + technicianIdOrTmUserId);
+        }
+
+        List<Map<String, Object>> technicianRows = tmJdbcTemplate.queryForList("""
+                SELECT TOP 1 id
+                FROM technicians
+                WHERE is_deleted = 0
+                  AND company_id = ?
+                  AND LOWER(email) = LOWER(?)
+                ORDER BY id ASC
+                """, companyId, email);
+        if (technicianRows.isEmpty()) {
+            throw new ResourceNotFoundException("Technician not found: " + technicianIdOrTmUserId);
+        }
+
+        return asLong(technicianRows.get(0).get("id"));
     }
 
     /** Handles supports capex work order filter. */
