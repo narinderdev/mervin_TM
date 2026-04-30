@@ -56,6 +56,7 @@ public class WorkOrderTimesheetSyncService {
                     HttpStatus.CONFLICT,
                     "Timesheet sync is allowed only for completed work orders");
         }
+        validateWorkOrderSyncFields(context);
 
         List<DailyWorkLog> dailyLogs = getDailyLogs(workOrderId, companyId);
         if (dailyLogs.isEmpty()) {
@@ -234,6 +235,20 @@ public class WorkOrderTimesheetSyncService {
         row.setExpenseCode(null);
         row.setCompanyNumber(dailyLog.companyNumber());
         row.setIsDeleted(Boolean.FALSE);
+    }
+
+    /** Validates mandatory work order fields required by timesheet row schema. */
+    private void validateWorkOrderSyncFields(WorkOrderContext context) {
+        if (trimToNull(context.department()) == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Work order " + context.workOrderId() + " is missing department; cannot sync timesheet row");
+        }
+        if (trimToNull(context.account()) == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Work order " + context.workOrderId() + " is missing account; cannot sync timesheet row");
+        }
     }
 
     /** Handles recompute draft totals. */
