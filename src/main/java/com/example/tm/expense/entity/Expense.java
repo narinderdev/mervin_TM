@@ -48,6 +48,18 @@ public class Expense {
     @Column(name = "work_order_name", length = 255)
     private String workOrderName;
 
+    @Column(name = "work_order_type", length = 100)
+    private String workOrderType;
+
+    @Column(name = "department", length = 100)
+    private String department;
+
+    @Column(name = "account", length = 100)
+    private String account;
+
+    @Column(name = "expense_type", length = 100)
+    private String expenseType;
+
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 

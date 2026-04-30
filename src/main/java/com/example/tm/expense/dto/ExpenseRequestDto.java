@@ -39,6 +39,18 @@ public class ExpenseRequestDto {
     @JsonProperty("work_order_name")
     private String workOrderName;
 
+    @JsonProperty("work_order_type")
+    private String workOrderType;
+
+    @JsonProperty("department")
+    private String department;
+
+    @JsonProperty("account")
+    private String account;
+
+    @JsonProperty("expense_type")
+    private String expenseType;
+
     /** Returns date. */
     public LocalDate getDate() {
         return date;
@@ -107,5 +119,45 @@ public class ExpenseRequestDto {
     /** Sets work order name. */
     public void setWorkOrderName(String workOrderName) {
         this.workOrderName = workOrderName;
+    }
+
+    /** Returns work order type. */
+    public String getWorkOrderType() {
+        return workOrderType;
+    }
+
+    /** Sets work order type. */
+    public void setWorkOrderType(String workOrderType) {
+        this.workOrderType = workOrderType;
+    }
+
+    /** Returns department. */
+    public String getDepartment() {
+        return department;
+    }
+
+    /** Sets department. */
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    /** Returns account. */
+    public String getAccount() {
+        return account;
+    }
+
+    /** Sets account. */
+    public void setAccount(String account) {
+        this.account = account;
+    }
+
+    /** Returns expense type. */
+    public String getExpenseType() {
+        return expenseType;
+    }
+
+    /** Sets expense type. */
+    public void setExpenseType(String expenseType) {
+        this.expenseType = expenseType;
     }
 }

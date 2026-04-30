@@ -27,6 +27,10 @@ public class ExpenseResponseDto {
     private String userName;
     private Long workOrderId;
     private String workOrderName;
+    private String workOrderType;
+    private String department;
+    private String account;
+    private String expenseType;
     private String status;
     private Instant submittedAt;
     private Instant approvedAt;

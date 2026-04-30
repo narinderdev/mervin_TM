@@ -198,6 +198,10 @@ public class ExpenseServiceImpl implements ExpenseService {
         entity.setUserId(requestDto.getUserId());
         entity.setWorkOrderId(requestDto.getWorkOrderId());
         entity.setWorkOrderName(trimToNull(requestDto.getWorkOrderName()));
+        entity.setWorkOrderType(trimToNull(requestDto.getWorkOrderType()));
+        entity.setDepartment(trimToNull(requestDto.getDepartment()));
+        entity.setAccount(trimToNull(requestDto.getAccount()));
+        entity.setExpenseType(trimToNull(requestDto.getExpenseType()));
     }
 
     /** Converts data to response. */
@@ -224,6 +228,10 @@ public class ExpenseServiceImpl implements ExpenseService {
                 .userName(userName)
                 .workOrderId(entity.getWorkOrderId())
                 .workOrderName(entity.getWorkOrderName())
+                .workOrderType(entity.getWorkOrderType())
+                .department(entity.getDepartment())
+                .account(entity.getAccount())
+                .expenseType(entity.getExpenseType())
                 .status(normalizeStatus(entity.getStatus()))
                 .submittedAt(entity.getSubmittedAt())
                 .approvedAt(entity.getApprovedAt())
