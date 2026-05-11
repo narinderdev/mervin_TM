@@ -2,6 +2,8 @@ package com.example.tm.auth.service;
 
 import com.example.tm.auth.dto.LoginRequestDto;
 import com.example.tm.auth.dto.LoginResponseDto;
+import com.example.tm.auth.dto.ChangePasswordDto;
+import com.example.tm.auth.dto.ForgotPasswordDto;
 import com.example.tm.auth.dto.MfaLoginDto;
 import com.example.tm.auth.dto.SignupRequestDto;
 import com.example.tm.auth.dto.UserSummaryDto;
@@ -193,6 +195,59 @@ public class TmAuthService {
         List<EamCompany> companies = resolveLoginCompanies(eamUser, normalizedEmail);
         String token = tmJwtService.generateAccessToken(user);
         return buildLoginResponse(user, eamUser, companies, token, false, null);
+    }
+
+    /** Changes user password. */
+    @Transactional
+    public void changePassword(ChangePasswordDto dto) {
+        String normalizedEmail = normalizeEmail(dto.getEmail());
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+
+        TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        String currentPasswordHash = user.getPasswordHash();
+        if (currentPasswordHash == null || currentPasswordHash.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Password is not set for this user");
+        }
+        if (!passwordEncoder.matches(dto.getCurrentPassword(), currentPasswordHash)) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Current password is incorrect");
+        }
+
+        String encodedPassword = passwordEncoder.encode(dto.getNewPassword());
+        user.setPasswordHash(encodedPassword);
+        tmUserRepository.save(user);
+        syncPasswordToActiveEamUser(normalizedEmail, encodedPassword);
+    }
+
+    /** Resets user password from forgot-password flow. */
+    @Transactional
+    public void forgotPassword(ForgotPasswordDto dto) {
+        String normalizedEmail = normalizeEmail(dto.getEmail());
+        if (normalizedEmail == null || normalizedEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+
+        TmUser user = tmUserRepository.findByEmailIgnoreCase(normalizedEmail)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+
+        if (!Boolean.TRUE.equals(user.getActive())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User is not active");
+        }
+        if (user.getPasswordHash() != null
+                && !user.getPasswordHash().isBlank()
+                && passwordEncoder.matches(dto.getNewPassword(), user.getPasswordHash())) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "New password must be different from current password");
+        }
+
+        String encodedPassword = passwordEncoder.encode(dto.getNewPassword());
+        user.setPasswordHash(encodedPassword);
+        tmUserRepository.save(user);
+        syncPasswordToActiveEamUser(normalizedEmail, encodedPassword);
     }
 
     /** Returns logged in users. */
@@ -525,6 +580,17 @@ public class TmAuthService {
             return;
         }
         loginAttemptByEmail.remove(normalizedEmail);
+    }
+
+    /** Syncs password to active EAM user when mapped by email. */
+    private void syncPasswordToActiveEamUser(String normalizedEmail, String encodedPassword) {
+        eamUserRepository.findByEmailAndDeletedFalse(normalizedEmail).ifPresent(eamUser -> {
+            if (eamUser.getStatus() != EamUserStatus.ACTIVE) {
+                throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User is inactive");
+            }
+            eamUser.setPassword(encodedPassword);
+            eamUserRepository.save(eamUser);
+        });
     }
 
     /** Stores login attempt state. */
