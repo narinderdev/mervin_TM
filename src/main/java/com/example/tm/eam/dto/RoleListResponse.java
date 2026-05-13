@@ -1,0 +1,20 @@
+package com.example.tm.eam.dto;
+
+import java.util.List;
+import lombok.Builder;
+import lombok.Data;
+
+/**
+ * Transfers role list response data between layers.
+ */
+@Data
+@Builder
+public class RoleListResponse {
+
+    private List<RoleResponse> roles;
+    private int page;
+    private int size;
+    private long totalElements;
+    private int totalPages;
+    private boolean last;
+}
