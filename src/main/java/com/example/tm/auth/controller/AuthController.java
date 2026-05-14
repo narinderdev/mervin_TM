@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -80,8 +81,9 @@ public class AuthController {
 
     /** Returns logged in users. */
     @GetMapping("/users")
-    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getLoggedInUsers() {
-        List<UserSummaryDto> data = tmAuthService.getLoggedInUsers();
+    public ResponseEntity<ApiResponse<List<UserSummaryDto>>> getLoggedInUsers(
+            @RequestParam("companyId") Long companyId) {
+        List<UserSummaryDto> data = tmAuthService.getLoggedInUsers(companyId);
         return ResponseEntity.ok(
                 ApiResponse.successResponse(HttpStatus.OK.value(), "Active users fetched successfully", data)
         );

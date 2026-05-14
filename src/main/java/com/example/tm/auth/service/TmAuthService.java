@@ -20,10 +20,12 @@ import com.example.tm.auth.repository.TmUserRepository;
 import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.security.TmJwtService;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
@@ -250,11 +252,18 @@ public class TmAuthService {
         syncPasswordToActiveEamUser(normalizedEmail, encodedPassword);
     }
 
-    /** Returns logged in users. */
+    /** Returns active users for a company. */
     @Transactional(readOnly = true)
-    public List<UserSummaryDto> getLoggedInUsers() {
+    public List<UserSummaryDto> getLoggedInUsers(Long companyId) {
+        Long resolvedCompanyId = requireActiveCompanyId(companyId);
+
+        Set<String> companyUserEmails = new HashSet<>();
+        companyUserEmails.addAll(eamUserRepository.findActiveEmailsByCompanyId(resolvedCompanyId, EamUserStatus.ACTIVE));
+        companyUserEmails.addAll(loadActiveTechnicianEmailsByCompanyId(resolvedCompanyId));
+
         return tmUserRepository.findByActiveTrue()
                 .stream()
+                .filter(user -> companyUserEmails.contains(normalizeEmail(user.getEmail())))
                 .map(this::toUserSummary)
                 .collect(Collectors.toList());
     }
@@ -414,6 +423,39 @@ public class TmAuthService {
                 .stream()
                 .sorted(java.util.Comparator.comparing(EamCompany::getId))
                 .toList();
+    }
+
+    /** Loads active technician emails for a TM company. */
+    private Set<String> loadActiveTechnicianEmailsByCompanyId(Long companyId) {
+        List<String> emails = tmJdbcTemplate.queryForList(
+                """
+                        SELECT DISTINCT LOWER(email)
+                        FROM technicians
+                        WHERE is_deleted = 0
+                          AND company_id = ?
+                          AND email IS NOT NULL
+                          AND LTRIM(RTRIM(email)) <> ''
+                        """,
+                String.class,
+                companyId);
+
+        return emails.stream()
+                .map(this::normalizeEmail)
+                .filter(email -> email != null && !email.isBlank())
+                .collect(Collectors.toSet());
+    }
+
+    /** Resolves company id and ensures company is active in EAM. */
+    private Long requireActiveCompanyId(Long companyId) {
+        if (companyId == null || companyId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "companyId query parameter is required");
+        }
+        EamCompany company = eamCompanyRepository.findById(companyId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Company not found in EAM"));
+        if (!Boolean.TRUE.equals(company.getActive())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Company is inactive in EAM");
+        }
+        return companyId;
     }
 
     /** Converts data to company dto. */
