@@ -8,10 +8,15 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
 import java.security.Key;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Base64;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +28,7 @@ public class TmJwtService {
 
     private final Key key;
     private final long expirationMs;
+    private final ConcurrentMap<String, Long> revokedTokenHashToExpiryMs = new ConcurrentHashMap<>();
 
     /** Creates a new instance of tm jwt service. */
     public TmJwtService(
@@ -59,12 +65,15 @@ public class TmJwtService {
 
     /** Handles parse claims. */
     public Claims parseClaims(String token) {
+        ensureTokenNotRevoked(token);
         try {
-            return Jwts.parserBuilder()
+            Claims claims = Jwts.parserBuilder()
                     .setSigningKey(key)
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
+            cleanupRevokedTokens();
+            return claims;
         } catch (JwtException | IllegalArgumentException ex) {
             throw new IllegalArgumentException("Invalid access token", ex);
         }
@@ -88,5 +97,50 @@ public class TmJwtService {
             throw new IllegalArgumentException("Email claim not present in token");
         }
         return subject.trim().toLowerCase();
+    }
+
+    /** Revokes a JWT token until its expiration time. */
+    public void revokeToken(String token, Date expiresAt) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Missing access token");
+        }
+        long expiryMs = expiresAt == null ? System.currentTimeMillis() : expiresAt.getTime();
+        revokedTokenHashToExpiryMs.put(hashToken(token), expiryMs);
+        cleanupRevokedTokens();
+    }
+
+    /** Ensures revoked access tokens are rejected. */
+    private void ensureTokenNotRevoked(String token) {
+        if (token == null || token.isBlank()) {
+            throw new IllegalArgumentException("Missing access token");
+        }
+        String tokenHash = hashToken(token);
+        Long expiryMs = revokedTokenHashToExpiryMs.get(tokenHash);
+        if (expiryMs == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        if (expiryMs <= now) {
+            revokedTokenHashToExpiryMs.remove(tokenHash, expiryMs);
+            return;
+        }
+        throw new IllegalArgumentException("Access token has been revoked");
+    }
+
+    /** Removes expired revoked-token entries. */
+    private void cleanupRevokedTokens() {
+        long now = System.currentTimeMillis();
+        revokedTokenHashToExpiryMs.entrySet().removeIf(entry -> entry.getValue() <= now);
+    }
+
+    /** Creates a stable hash so raw JWT values are not stored in-memory. */
+    private String hashToken(String token) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            return Base64.getUrlEncoder().withoutPadding().encodeToString(hash);
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 algorithm is unavailable", ex);
+        }
     }
 }

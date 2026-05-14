@@ -21,6 +21,7 @@ import com.example.tm.auth.repository.TmUserInviteRepository;
 import com.example.tm.auth.security.TmJwtService;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -29,6 +30,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import io.jsonwebtoken.Claims;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -197,6 +199,24 @@ public class TmAuthService {
         List<EamCompany> companies = resolveLoginCompanies(eamUser, normalizedEmail);
         String token = tmJwtService.generateAccessToken(user);
         return buildLoginResponse(user, eamUser, companies, token, false, null);
+    }
+
+    /** Logs out current user by revoking the presented access token. */
+    public void logout(String authorizationHeader) {
+        String token = extractBearerToken(authorizationHeader);
+        Claims claims;
+        try {
+            claims = tmJwtService.parseClaims(token);
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid access token");
+        }
+
+        String tokenType = claims.get("type", String.class);
+        if (!"access".equals(tokenType)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Only access token can be used for logout");
+        }
+
+        tmJwtService.revokeToken(token, claims.getExpiration());
     }
 
     /** Changes user password. */
@@ -487,15 +507,37 @@ public class TmAuthService {
                 .map(this::toCompanyDto)
                 .toList();
         boolean isAdmin = eamUser != null && isAdmin(eamUser);
+        Set<String> permissionCodes = resolvePermissionCodes(eamUser);
 
         return LoginResponseDto.builder()
                 .token(token)
                 .user(toUserSummary(user))
                 .companies(responseCompanies)
+                .permissionCodes(permissionCodes)
                 .isCompanySetup(isAdmin ? !responseCompanies.isEmpty() : null)
                 .mfaRequired(mfaRequired)
                 .mfaToken(mfaToken)
                 .build();
+    }
+
+    /** Resolves permission codes from active EAM role mappings. */
+    private Set<String> resolvePermissionCodes(EamUser eamUser) {
+        if (eamUser == null || eamUser.getUserRoles() == null) {
+            return Set.of();
+        }
+
+        return eamUser.getUserRoles().stream()
+                .map(EamUserRole::getRole)
+                .filter(Objects::nonNull)
+                .filter(role -> Boolean.TRUE.equals(role.getActive()))
+                .flatMap(role -> role.getPermissions() == null ? Stream.empty() : role.getPermissions().stream())
+                .filter(Objects::nonNull)
+                .filter(permission -> Boolean.TRUE.equals(permission.getActive()))
+                .map(permission -> permission.getCode())
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(code -> !code.isEmpty())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
     /** Builds mfa token. */
@@ -526,6 +568,19 @@ public class TmAuthService {
         } catch (ResponseStatusException ex) {
             throw ex;
         }
+    }
+
+    /** Extracts bearer token from authorization header. */
+    private String extractBearerToken(String authorizationHeader) {
+        if (authorizationHeader == null || authorizationHeader.isBlank() || !authorizationHeader.startsWith("Bearer ")) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");
+        }
+
+        String token = authorizationHeader.substring(7).trim();
+        if (token.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header");
+        }
+        return token;
     }
 
     /** Extracts user id from claims. */

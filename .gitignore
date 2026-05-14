@@ -42,12 +42,10 @@ out/
 src/.env
 
 
-.gradle-home/
-
 logs/
 
 src/main/java/com/example/eam1/*
 
 src/test/
 
-.gradle-user/
+/.gradle*/

@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -49,6 +50,16 @@ public class AuthController {
         LoginResponseDto data = tmAuthService.loginWithMfa(request);
         return ResponseEntity.ok(
                 ApiResponse.successResponse(HttpStatus.OK.value(), "Login Successfully", data)
+        );
+    }
+
+    /** Handles logout. */
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout(
+            @RequestHeader(name = "Authorization", required = false) String authorizationHeader) {
+        tmAuthService.logout(authorizationHeader);
+        return ResponseEntity.ok(
+                ApiResponse.successResponse(HttpStatus.OK.value(), "Logout successful", null)
         );
     }
 
