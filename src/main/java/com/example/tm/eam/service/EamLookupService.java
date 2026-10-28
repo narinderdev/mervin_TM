@@ -27,29 +27,29 @@ import java.util.List;
  */
 public interface EamLookupService {
 
-    TechnicianDashboardResponse getDashboardTechnicians(Integer limit, Long companyId);
+    TechnicianDashboardResponse getDashboardTechnicians(Integer limit);
 
     TechnicianDetailsResponse createTechnician(TechnicianCreateRequest request);
 
-    TechnicianDetailsResponse getTechnicianById(Long technicianId, Long companyId);
+    TechnicianDetailsResponse getTechnicianById(Long technicianId);
 
-    TechnicianDetailsResponse patchTechnician(Long technicianId, Long companyId, TechnicianPatchRequest request);
+    TechnicianDetailsResponse patchTechnician(Long technicianId, TechnicianPatchRequest request);
 
-    void deleteTechnician(Long technicianId, Long companyId);
+    void deleteTechnician(Long technicianId);
 
-    TechnicianListResponse getTechnicians(int page, int size, Long companyId);
+    TechnicianListResponse getTechnicians(int page, int size);
 
-    List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days, Long companyId);
+    List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days);
 
     TechnicianTeamDetailsResponse createTechnicianTeam(TechnicianTeamCreateRequest request);
 
-    TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId, Long companyId);
+    TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId);
 
-    TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, Long companyId, TechnicianTeamPatchRequest request);
+    TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, TechnicianTeamPatchRequest request);
 
-    void deleteTechnicianTeam(Long teamId, Long companyId);
+    void deleteTechnicianTeam(Long teamId);
 
-    TechnicianTeamListResponse getTechnicianTeams(int page, int size, Long companyId);
+    TechnicianTeamListResponse getTechnicianTeams(int page, int size);
 
     WorkOrderNumberListResponse getWorkOrderNumbers(int page, int size, Long technicianId, Long companyId);
 
@@ -71,9 +71,9 @@ public interface EamLookupService {
 
     TechnicianHolidayResponse getHolidayById(Long holidayId, Long companyId);
 
-    TechnicianLeaveListResponse getTechniciansLeaves(int page, int size, Long companyId);
+    TechnicianLeaveListResponse getTechniciansLeaves(int page, int size);
 
-    TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId, Long companyId);
+    TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId);
 
-    TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId, Long companyId);
+    TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId);
 }

@@ -3,6 +3,7 @@ package com.example.tm.eam.controller;
 import com.example.tm.eam.dto.TechnicianTeamCreateRequest;
 import com.example.tm.eam.dto.TechnicianTeamPatchRequest;
 import com.example.tm.eam.service.EamLookupService;
+import com.example.tm.auth.security.TmCompanyContextHolder;
 import com.example.tm.shared.constants.HeaderConstants;
 import com.example.tm.shared.web.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,10 +36,9 @@ public class TechnicianTeamController {
     /** Creates technician team. */
     @PostMapping("/technician-teams")
     public ResponseEntity<ApiResponse<?>> createTechnicianTeam(
-            @RequestParam("companyId") Long companyId,
             @Valid @RequestBody TechnicianTeamCreateRequest requestBody,
             HttpServletRequest request) {
-        requestBody.setCompanyId(companyId);
+        Long companyId = TmCompanyContextHolder.requireCompanyId();
         log.info("EAM POST /technician-teams companyId={} cid={}", companyId, correlationId(request));
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.successResponse(
                 HttpStatus.CREATED.value(),
@@ -50,37 +50,37 @@ public class TechnicianTeamController {
     @GetMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> getTechnicianTeamById(
             @PathVariable("id") Long teamId,
-            @RequestParam("companyId") Long companyId,
             HttpServletRequest request) {
+        Long companyId = TmCompanyContextHolder.requireCompanyId();
         log.info("EAM GET /technician-teams/{} companyId={} cid={}", teamId, companyId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(),
                 "Technician team fetched successfully",
-                eamLookupService.getTechnicianTeamById(teamId, companyId)));
+                eamLookupService.getTechnicianTeamById(teamId)));
     }
 
     /** Handles patch technician team. */
     @PatchMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> patchTechnicianTeam(
             @PathVariable("id") Long teamId,
-            @RequestParam("companyId") Long companyId,
             @RequestBody TechnicianTeamPatchRequest requestBody,
             HttpServletRequest request) {
+        Long companyId = TmCompanyContextHolder.requireCompanyId();
         log.info("EAM PATCH /technician-teams/{} companyId={} cid={}", teamId, companyId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(),
                 "Technician team updated successfully",
-                eamLookupService.patchTechnicianTeam(teamId, companyId, requestBody)));
+                eamLookupService.patchTechnicianTeam(teamId, requestBody)));
     }
 
     /** Deletes technician team. */
     @DeleteMapping("/technician-teams/{id}")
     public ResponseEntity<ApiResponse<?>> deleteTechnicianTeam(
             @PathVariable("id") Long teamId,
-            @RequestParam("companyId") Long companyId,
             HttpServletRequest request) {
+        Long companyId = TmCompanyContextHolder.requireCompanyId();
         log.info("EAM DELETE /technician-teams/{} companyId={} cid={}", teamId, companyId, correlationId(request));
-        eamLookupService.deleteTechnicianTeam(teamId, companyId);
+        eamLookupService.deleteTechnicianTeam(teamId);
         return ResponseEntity.ok(ApiResponse.successResponse(
                 HttpStatus.OK.value(),
                 "Technician team deleted successfully",
@@ -92,11 +92,11 @@ public class TechnicianTeamController {
     public ResponseEntity<ApiResponse<?>> getTechnicianTeams(
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size,
-            @RequestParam("companyId") Long companyId,
             HttpServletRequest request) {
+        Long companyId = TmCompanyContextHolder.requireCompanyId();
         log.info("EAM GET /technician-teams page={} size={} companyId={} cid={}", page, size, companyId, correlationId(request));
         return ResponseEntity.ok(ApiResponse.successResponse(
-                HttpStatus.OK.value(), "Technician teams fetched successfully", eamLookupService.getTechnicianTeams(page, size, companyId)));
+                HttpStatus.OK.value(), "Technician teams fetched successfully", eamLookupService.getTechnicianTeams(page, size)));
     }
 
     /** Handles correlation id. */

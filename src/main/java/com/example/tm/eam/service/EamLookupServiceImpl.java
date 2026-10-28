@@ -25,6 +25,7 @@ import com.example.tm.eam.dto.WorkOrderNumberOptionDto;
 import com.example.tm.eam.dto.WorkOrderTypeListResponse;
 import com.example.tm.eam.dto.WorkRequestTypePropertyUnitListResponse;
 import com.example.tm.shared.exception.ResourceNotFoundException;
+import com.example.tm.auth.security.TmCompanyContextHolder;
 import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -64,8 +65,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Returns dashboard technicians. */
     @Override
-    public TechnicianDashboardResponse getDashboardTechnicians(Integer limit, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianDashboardResponse getDashboardTechnicians(Integer limit) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         int resolvedLimit = limit == null ? 5 : Math.max(1, Math.min(limit, 50));
         LocalDate today = LocalDate.now();
@@ -176,7 +177,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     @Override
     @Transactional(transactionManager = "tmTransactionManager")
     public TechnicianDetailsResponse createTechnician(TechnicianCreateRequest request) {
-        Long companyId = requireCompanyId(request.getCompanyId());
+        Long companyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(companyId);
         String firstName = requireNonBlank(request.getFirstName(), "First name is required");
         String lastName = requireNonBlank(request.getLastName(), "Last name is required");
@@ -228,13 +229,13 @@ public class EamLookupServiceImpl implements EamLookupService {
         if (technicianPk == null || technicianPk <= 0) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create technician");
         }
-        return getTechnicianById(technicianPk, companyId);
+        return getTechnicianById(technicianPk);
     }
 
     /** Returns technician by id. */
     @Override
-    public TechnicianDetailsResponse getTechnicianById(Long technicianId, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianDetailsResponse getTechnicianById(Long technicianId) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         Map<String, Object> row = getTechnicianRowOrThrowTm(technicianId, safeCompanyId);
         return mapTechnicianTm(row, safeCompanyId);
@@ -242,8 +243,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Handles patch technician. */
     @Override
-    public TechnicianDetailsResponse patchTechnician(Long technicianId, Long companyId, TechnicianPatchRequest request) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianDetailsResponse patchTechnician(Long technicianId, TechnicianPatchRequest request) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         Map<String, Object> current = getTechnicianRowOrThrowTm(technicianId, safeCompanyId);
 
@@ -321,13 +322,13 @@ public class EamLookupServiceImpl implements EamLookupService {
                 technicianId,
                 safeCompanyId);
 
-        return getTechnicianById(technicianId, safeCompanyId);
+        return getTechnicianById(technicianId);
     }
 
     /** Deletes technician. */
     @Override
-    public void deleteTechnician(Long technicianId, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public void deleteTechnician(Long technicianId) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         ensureTechnicianExistsTm(technicianId, safeCompanyId);
         tmJdbcTemplate.update("DELETE FROM technician_team_members WHERE technician_id = ?", technicianId);
@@ -336,8 +337,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Returns technicians. */
     @Override
-    public TechnicianListResponse getTechnicians(int page, int size, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianListResponse getTechnicians(int page, int size) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
@@ -369,8 +370,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Returns technician availability monthly. */
     @Override
-    public List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public List<DailyAvailabilityDto> getTechnicianAvailabilityMonthly(Long technicianId, Integer days) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         ensureTechnicianExistsTm(technicianId, safeCompanyId);
         return buildAvailability(technicianId, days, safeCompanyId);
@@ -379,7 +380,7 @@ public class EamLookupServiceImpl implements EamLookupService {
     /** Creates technician team. */
     @Override
     public TechnicianTeamDetailsResponse createTechnicianTeam(TechnicianTeamCreateRequest request) {
-        Long companyId = requireCompanyId(request.getCompanyId());
+        Long companyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(companyId);
         String teamName = requireNonBlank(request.getTeamName(), "Team name is required");
         ensureTeamNameUniqueTm(teamName, null, companyId);
@@ -404,13 +405,13 @@ public class EamLookupServiceImpl implements EamLookupService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to create technician team");
         }
         applyTeamMembershipTm(teamId, companyId, request.getTechnicianIds(), request.getTeamLeaderId());
-        return getTechnicianTeamById(teamId, companyId);
+        return getTechnicianTeamById(teamId);
     }
 
     /** Returns technician team by id. */
     @Override
-    public TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianTeamDetailsResponse getTechnicianTeamById(Long teamId) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         Map<String, Object> row = getTeamRowOrThrowTm(teamId, safeCompanyId);
         return mapTeamTm(row, safeCompanyId);
@@ -418,8 +419,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Handles patch technician team. */
     @Override
-    public TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, Long companyId, TechnicianTeamPatchRequest request) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianTeamDetailsResponse patchTechnicianTeam(Long teamId, TechnicianTeamPatchRequest request) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         Map<String, Object> current = getTeamRowOrThrowTm(teamId, safeCompanyId);
 
@@ -445,13 +446,13 @@ public class EamLookupServiceImpl implements EamLookupService {
                 safeCompanyId);
 
         applyTeamMembershipTm(teamId, safeCompanyId, request.getTechnicianIds(), request.getTeamLeaderId());
-        return getTechnicianTeamById(teamId, safeCompanyId);
+        return getTechnicianTeamById(teamId);
     }
 
     /** Deletes technician team. */
     @Override
-    public void deleteTechnicianTeam(Long teamId, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public void deleteTechnicianTeam(Long teamId) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         getTeamRowOrThrowTm(teamId, safeCompanyId);
         long membersCount = queryLongTm("SELECT COUNT(1) FROM technician_team_members WHERE team_id = ?", teamId);
@@ -463,8 +464,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Returns technician teams. */
     @Override
-    public TechnicianTeamListResponse getTechnicianTeams(int page, int size, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianTeamListResponse getTechnicianTeams(int page, int size) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 10 : Math.min(size, 200);
@@ -1232,8 +1233,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Returns technicians leaves. */
     @Override
-    public TechnicianLeaveListResponse getTechniciansLeaves(int page, int size, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianLeaveListResponse getTechniciansLeaves(int page, int size) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         int safePage = Math.max(page, 0);
         int safeSize = size <= 0 ? 100 : Math.min(size, 500);
@@ -1267,8 +1268,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Returns technician leaves. */
     @Override
-    public TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianLeaveListResponse getTechnicianLeaves(Long technicianId) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         ensureTechnicianExistsTm(technicianId, safeCompanyId);
         boolean companyScopedLeaves = hasCompanyIdColumn("technician_leaves");
@@ -1288,8 +1289,8 @@ public class EamLookupServiceImpl implements EamLookupService {
 
     /** Returns technician leave by id. */
     @Override
-    public TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId, Long companyId) {
-        Long safeCompanyId = requireCompanyId(companyId);
+    public TechnicianLeaveResponse getTechnicianLeaveById(Long technicianId, Long leaveId) {
+        Long safeCompanyId = TmCompanyContextHolder.requireCompanyId();
         ensureCompanyExistsInEam(safeCompanyId);
         ensureTechnicianExistsTm(technicianId, safeCompanyId);
         boolean companyScopedLeaves = hasCompanyIdColumn("technician_leaves");

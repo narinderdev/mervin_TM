@@ -47,5 +47,27 @@ logs/
 src/main/java/com/example/eam1/*
 
 src/test/
+!src/test/
+src/test/*
+!src/test/java/
+src/test/java/*
+!src/test/java/com/
+src/test/java/com/*
+!src/test/java/com/example/
+src/test/java/com/example/*
+!src/test/java/com/example/tm/
+src/test/java/com/example/tm/*
+!src/test/java/com/example/tm/auth/
+src/test/java/com/example/tm/auth/*
+!src/test/java/com/example/tm/auth/security/
+src/test/java/com/example/tm/auth/security/*
+!src/test/java/com/example/tm/auth/security/TmActiveCompanyFilterTest.java
+!src/test/java/com/example/tm/auth/security/TmCompanyAuthorizationServiceTest.java
+!src/test/java/com/example/tm/auth/security/TmJwtAuthenticationFilterTest.java
+!src/test/java/com/example/tm/eam/
+src/test/java/com/example/tm/eam/*
+!src/test/java/com/example/tm/eam/service/
+src/test/java/com/example/tm/eam/service/*
+!src/test/java/com/example/tm/eam/service/EamLookupServiceTenantTest.java
 
 /.gradle*/
